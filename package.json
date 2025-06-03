@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@devmehq/email-validator-js": "^2.0.1",
+    "@vercel/analytics": "^1.5.0",
     "axios": "^1.9.0",
     "email-domain-verifier": "^1.0.6",
     "framer-motion": "^12.15.0",
