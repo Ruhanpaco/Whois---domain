@@ -2,9 +2,7 @@
 
 import { useState } from 'react';
 import { motion } from 'framer-motion';
-import Link from 'next/link';
 import { 
-  FaHome, 
   FaCode, 
   FaTerminal, 
   FaLock, 
@@ -12,7 +10,6 @@ import {
   FaGlobe, 
   FaNetworkWired, 
   FaFingerprint,
-  FaRobot,
   FaBrain,
   FaShieldAlt,
   FaSearch,
@@ -480,7 +477,7 @@ export default function Futures() {
                 <div className="text-xs text-gray-400">
                   <p>Would you like to request a new feature?</p>
                   <p className="mt-2">
-                    <span className="text-green-400">$</span> domain-intel --request <span className="text-yellow-400">"your feature idea"</span>
+                    <span className="text-green-400">$</span> domain-intel --request <span className="text-yellow-400">&quot;your feature idea&quot;</span>
                   </p>
                   <div className="mt-4 flex">
                     <input 

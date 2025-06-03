@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { FaEnvelope, FaInstagram, FaGithub, FaGlobe, FaCode, FaHeart, FaRocket, FaSearch, FaTerminal, FaDatabase, FaServer, FaShieldAlt } from 'react-icons/fa';
+import { FaEnvelope, FaInstagram, FaGithub, FaGlobe, FaCode, FaHeart, FaRocket, FaSearch, FaTerminal, FaDatabase, FaServer, FaShieldAlt, FaDollarSign, FaStripe } from 'react-icons/fa';
 import { motion } from 'framer-motion';
 
 export default function Footer() {
@@ -73,6 +73,15 @@ export default function Footer() {
                 <FaEnvelope className="h-5 w-5" />
               </a>
             </div>
+            <a 
+              href="https://pay.ruhanpacolli.online/b/7sY3cu0Zj4nNbwkevgejK01" 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="inline-flex items-center px-3 py-1 bg-green-600 hover:bg-green-700 text-white rounded text-sm transition-colors"
+            >
+              <FaDollarSign className="mr-1" />
+              Support <span className="ml-1 text-xs opacity-80">via Stripe</span>
+            </a>
           </div>
 
           {/* Navigation Links */}

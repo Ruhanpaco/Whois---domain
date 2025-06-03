@@ -1,4 +1,4 @@
-import { MongoClient } from 'mongodb';
+import { MongoClient, Db } from 'mongodb';
 
 const MONGODB_URI = 'mongodb+srv://whoisdomainRPaco:UvBGlp8KOJEWjuRa@domainwhoisrp.bt0xapj.mongodb.net/?retryWrites=true&w=majority&appName=DomainWhoisRP';
 const MONGODB_DB = 'domain_info';
@@ -15,7 +15,7 @@ if (!MONGODB_DB) {
 
 interface MongoConnection {
   client: MongoClient;
-  db: any;
+  db: Db;
 }
 
 /**
@@ -35,11 +35,6 @@ export async function connectToDatabase(): Promise<MongoConnection> {
   }
 
   if (!cached.promise) {
-    const opts = {
-      useNewUrlParser: true,
-      useUnifiedTopology: true,
-    };
-
     cached.promise = MongoClient.connect(MONGODB_URI)
       .then((client) => {
         return {

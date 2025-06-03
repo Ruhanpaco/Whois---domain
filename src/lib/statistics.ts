@@ -7,7 +7,7 @@ export const connectMongoose = async () => {
   if (mongoose.connection.readyState !== 1) {
     try {
       // Get MongoDB URI from our connection utility
-      const { client } = await connectToDatabase();
+      await connectToDatabase();
       // Use fixed URI as fallback
       const uri = 'mongodb+srv://whoisdomainRPaco:UvBGlp8KOJEWjuRa@domainwhoisrp.bt0xapj.mongodb.net/?retryWrites=true&w=majority&appName=DomainWhoisRP';
       

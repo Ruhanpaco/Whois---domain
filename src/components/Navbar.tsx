@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { motion } from 'framer-motion';
-import { FaGithub, FaTerminal, FaInfoCircle, FaHome, FaRocket, FaSearch, FaChartLine } from 'react-icons/fa';
+import { FaGithub, FaInfoCircle, FaHome, FaRocket, FaSearch } from 'react-icons/fa';
 import { useState, useEffect } from 'react';
 import { usePathname } from 'next/navigation';
 

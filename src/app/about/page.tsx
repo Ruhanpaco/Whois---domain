@@ -3,10 +3,7 @@
 import { motion } from 'framer-motion';
 import Link from 'next/link';
 import { 
-  FaHome, 
-  FaCode, 
   FaTerminal, 
-  FaRocket,
   FaServer,
   FaGlobe,
   FaShieldAlt,
@@ -153,7 +150,7 @@ export default function About() {
                       </li>
                       <li className="flex">
                         <span className="text-green-500 mr-2">6.</span>
-                        <span>Subdomain discovery techniques are employed to map the domain's structure</span>
+                        <span>Subdomain discovery techniques are employed to map the domain&apos;s structure</span>
                       </li>
                       <li className="flex">
                         <span className="text-green-500 mr-2">7.</span>
@@ -204,7 +201,7 @@ export default function About() {
                     <p className="mb-2">
                       This tool is intended for legitimate security research, penetration testing with proper authorization, 
                       and system administration purposes only. Always ensure you have proper permission before scanning domains 
-                      you don't own.
+                      you don&apos;t own.
                     </p>
                     <p>
                       The developers of this tool accept no liability for misuse or any damages resulting from the use of this software.
