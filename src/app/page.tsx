@@ -5,6 +5,7 @@ import { motion } from 'framer-motion';
 import { useRouter } from 'next/navigation';
 import { FaSearch, FaGlobe, FaShieldAlt, FaTerminal, FaNetworkWired, FaLock, FaDatabase, FaUserSecret } from 'react-icons/fa';
 import StatisticsCounter from '@/components/StatisticsCounter';
+import DonationSection from '@/components/DonationSection';
 
 export default function Home() {
   const [domain, setDomain] = useState('');
@@ -156,7 +157,7 @@ export default function Home() {
                     <div className="flex items-center">
                       <FaNetworkWired className="text-green-500 mr-2" />
                       <h3 className="text-sm font-semibold text-green-400">DNS Records</h3>
-        </div>
+                    </div>
                     <p className="mt-2 text-xs text-gray-400">A, AAAA, MX, TXT, CNAME, NS records and more.</p>
                     <div className="mt-2 text-xs text-green-600">--module dns</div>
                   </motion.div>
@@ -249,7 +250,7 @@ export default function Home() {
                   <FaShieldAlt className="mr-2" /> Security Verification
                 </h3>
                 <p className="text-gray-300 text-sm">
-                  Check SSL certificate validity, expiration dates, and encryption details to assess a domain&apos;s security posture.
+                  Analyze SSL certificates and security configurations to ensure domains you interact with are properly secured.
                 </p>
               </div>
               <div className="bg-gray-900/50 border border-green-500/20 p-4 rounded-md">
@@ -257,10 +258,19 @@ export default function Home() {
                   <FaGlobe className="mr-2" /> Subdomain Discovery
                 </h3>
                 <p className="text-gray-300 text-sm">
-                  Discover subdomains associated with the main domain to get a complete picture of the website&apos;s structure.
+                  Find hidden subdomains and understand the full structure of the domain you&apos;re investigating.
                 </p>
               </div>
             </div>
+          </div>
+          
+          {/* Support/Donation Section */}
+          <DonationSection />
+          
+          {/* Features Explained - Detailed */}
+          <div className="w-full max-w-4xl mb-12">
+            <h2 className="text-xl text-white mb-6 font-medium">Advanced Domain Analysis Features</h2>
+            {/* Rest of the content... */}
           </div>
         </main>
       </div>

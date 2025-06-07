@@ -5,6 +5,7 @@ import { useSearchParams } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { FaServer, FaGlobe, FaShieldAlt, FaTerminal, FaArrowLeft, FaCopy, FaClock, FaCalendarAlt, FaExclamationTriangle, FaCheckCircle, FaTimesCircle, FaQuestionCircle, FaSitemap, FaLink, FaRocket, FaCode, FaHistory, FaRedoAlt } from 'react-icons/fa';
 import Link from 'next/link';
+import DonationMini from '@/components/DonationMini';
 
 // Define interfaces for the different data types
 interface WhoisData {
@@ -614,6 +615,62 @@ function ResultsPageContent() {
           </motion.div>
         ) : (
           <>
+            {/* Side panel with tabs */}
+            <div className="w-full lg:w-64 mb-6 lg:mb-0 flex-shrink-0">
+              <div className="bg-gray-900/70 border border-green-500/30 rounded-md overflow-hidden mb-6">
+                <div className="p-4 border-b border-green-500/30 flex items-center">
+                  <FaTerminal className="text-green-500 mr-2" />
+                  <h3 className="text-sm font-medium text-green-400">Analysis Tools</h3>
+                </div>
+                <div className="p-2">
+                  <button
+                    onClick={() => setActiveTab('whois')}
+                    className={`w-full text-left px-3 py-2 rounded mb-1 text-sm flex items-center ${activeTab === 'whois' ? 'bg-green-900/30 text-green-400' : 'text-gray-400 hover:text-green-400 hover:bg-green-900/10'}`}
+                  >
+                    <FaGlobe className="mr-2" /> WHOIS Lookup
+                    {apiErrors.whois && <FaExclamationTriangle className="ml-auto text-yellow-500" title="Error fetching data" />}
+                  </button>
+                  <button
+                    onClick={() => setActiveTab('dns')}
+                    className={`w-full text-left px-3 py-2 rounded mb-1 text-sm flex items-center ${activeTab === 'dns' ? 'bg-green-900/30 text-green-400' : 'text-gray-400 hover:text-green-400 hover:bg-green-900/10'}`}
+                  >
+                    <FaServer className="mr-2" /> DNS Records
+                    {apiErrors.dns && <FaExclamationTriangle className="ml-auto text-yellow-500" title="Error fetching data" />}
+                  </button>
+                  <button
+                    onClick={() => setActiveTab('ssl')}
+                    className={`w-full text-left px-3 py-2 rounded mb-1 text-sm flex items-center ${activeTab === 'ssl' ? 'bg-green-900/30 text-green-400' : 'text-gray-400 hover:text-green-400 hover:bg-green-900/10'}`}
+                  >
+                    <FaShieldAlt className="mr-2" /> SSL Certificate
+                    {apiErrors.ssl && <FaExclamationTriangle className="ml-auto text-yellow-500" title="Error fetching data" />}
+                  </button>
+                  <button
+                    onClick={() => setActiveTab('subdomains')}
+                    className={`w-full text-left px-3 py-2 rounded mb-1 text-sm flex items-center ${activeTab === 'subdomains' ? 'bg-green-900/30 text-green-400' : 'text-gray-400 hover:text-green-400 hover:bg-green-900/10'}`}
+                  >
+                    <FaSitemap className="mr-2" /> Subdomains
+                    {apiErrors.subdomains && <FaExclamationTriangle className="ml-auto text-yellow-500" title="Error fetching data" />}
+                  </button>
+                  <button
+                    onClick={() => setActiveTab('certhistory')}
+                    className={`w-full text-left px-3 py-2 rounded mb-1 text-sm flex items-center ${activeTab === 'certhistory' ? 'bg-green-900/30 text-green-400' : 'text-gray-400 hover:text-green-400 hover:bg-green-900/10'}`}
+                  >
+                    <FaHistory className="mr-2" /> Certificate History
+                    {apiErrors.certHistory && <FaExclamationTriangle className="ml-auto text-yellow-500" title="Error fetching data" />}
+                  </button>
+                </div>
+              </div>
+              
+              {/* Add DonationMini component here */}
+              <div className="mb-6">
+                <DonationMini />
+              </div>
+              
+              <div className="bg-gray-900/70 border border-green-500/30 rounded-md overflow-hidden">
+                {/* ... rest of existing sidebar content ... */}
+              </div>
+            </div>
+
             {/* Navigation Tabs */}
             <div className="mb-6 bg-gray-900/70 rounded-lg border border-green-500/30 p-1 sticky top-4 z-10 shadow-lg">
               <div className="flex flex-wrap">

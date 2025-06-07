@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
+import DonationBanner from "@/components/DonationBanner";
 import { Analytics } from "@vercel/analytics/next"
 
 const geistSans = Geist({
@@ -61,7 +62,7 @@ export const metadata: Metadata = {
     title: "Free WHOIS Lookup Tool | Domain Information & Registration Details",
     description: "Find website ownership details with our free WHOIS lookup tool. Get comprehensive domain registration information, DNS records, SSL certificates & more.",
     images: ["/twitter-image.png"],
-    creator: "@FRuhanpacodev",
+    creator: "@ruhanpacodev",
   },
   robots: {
     index: true,
@@ -90,6 +91,7 @@ export default function RootLayout({
           {children}
         </main>
         <Footer />
+        <DonationBanner />
         <Analytics />
       </body>
     </html>
