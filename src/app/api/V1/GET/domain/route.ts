@@ -6,17 +6,17 @@ export async function GET(request: Request) {
   console.log('Starting domain processing');
   const { searchParams } = new URL(request.url);
   const domain = searchParams.get('domain');
-  
+
   if (!domain) {
     return NextResponse.json({ error: 'Domain parameter is required' }, { status: 400 });
   }
-  
+
   try {
     // Update domain search statistics
     await updateDomainSearch(domain);
     
     console.log(`Processing domain information for ${domain}`);
-    
+
     // Construct the base URL for API requests
     const protocol = process.env.NODE_ENV === 'production' ? 'https' : 'http';
     const host = request.headers.get('host') || 'localhost:3000';
@@ -86,7 +86,7 @@ export async function GET(request: Request) {
         certificates: certHistoryData.certificates || []
       }
     };
-    
+
     return NextResponse.json(response);
   } catch (error) {
     console.error(`Error processing domain ${domain}:`, error);

@@ -48,7 +48,7 @@ export default function Footer() {
                 <FaGithub className="h-5 w-5" />
               </a>
               <a 
-                href="https://instagram.com/FRuhanpacodev" 
+                href="https://instagram.com/ruhanpacodev" 
                 target="_blank" 
                 rel="noopener noreferrer"
                 className="text-gray-400 hover:text-green-400 transition-colors"
@@ -176,13 +176,13 @@ export default function Footer() {
               </motion.li>
               <motion.li variants={item}>
                 <a 
-                  href="https://instagram.com/FRuhanpacodev" 
+                  href="https://instagram.com/ruhanpacodev" 
                   target="_blank" 
                   rel="noopener noreferrer"
                   className="text-gray-300 hover:text-green-400 transition-colors flex items-center text-sm group"
                 >
                   <code className="text-green-500 mr-2">$_INSTA:</code>
-                  @FRuhanpacodev
+                  @ruhanpacodev
                 </a>
               </motion.li>
               <motion.li variants={item}>
