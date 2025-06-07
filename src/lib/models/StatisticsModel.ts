@@ -23,7 +23,7 @@ const StatisticsSchema = new mongoose.Schema({
     type: Number,
     default: 0
   },
-  totalEmailChecks: {
+  totalCertHistoryLookups: {
     type: Number,
     default: 0
   },

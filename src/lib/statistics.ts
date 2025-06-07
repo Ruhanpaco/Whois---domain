@@ -196,20 +196,20 @@ export const updateWHOISLookupCount = async () => {
   }
 };
 
-// Update email check count
-export const updateEmailCheckCount = async (count: number) => {
+// Update certificate history lookup count
+export const updateCertHistoryLookupCount = async () => {
   await connectMongoose();
   
   try {
     const stats = await initializeStatistics();
     if (!stats) return;
     
-    stats.totalEmailChecks += count;
+    stats.totalCertHistoryLookups += 1;
     stats.lastUpdated = new Date();
     await stats.save();
-    console.log(`Email check count updated: +${count}`);
+    console.log(`Certificate history lookup count updated`);
   } catch (error) {
-    console.error('Error updating email check count:', error);
+    console.error('Error updating certificate history lookup count:', error);
   }
 };
 

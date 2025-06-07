@@ -8,6 +8,10 @@ const nextConfig = {
     // Disable TypeScript type checking during builds
     ignoreBuildErrors: true,
   },
+  // Disable HTTP Keep-Alive to prevent connection pooling issues
+  httpAgentOptions: {
+    keepAlive: false,
+  },
 }
 
 module.exports = nextConfig 

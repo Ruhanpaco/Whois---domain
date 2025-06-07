@@ -18,18 +18,69 @@ import {
   FaSitemap,
   FaTools,
   FaCheckCircle,
-  FaHistory
+  FaHistory,
+  FaRocket,
+  FaGlobeAmericas,
+  FaSpinner
 } from 'react-icons/fa';
+import Link from 'next/link';
 
 export default function Futures() {
   const [expandedFeature, setExpandedFeature] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'current' | 'upcoming' | 'versions'>('current');
+  const [featureRequest, setFeatureRequest] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [submitSuccess, setSubmitSuccess] = useState<boolean | null>(null);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   const toggleFeature = (featureId: string) => {
     if (expandedFeature === featureId) {
       setExpandedFeature(null);
     } else {
       setExpandedFeature(featureId);
+    }
+  };
+
+  const handleFeatureRequestChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setFeatureRequest(e.target.value);
+  };
+
+  const submitFeatureRequest = async () => {
+    if (!featureRequest.trim()) {
+      setSubmitError('Please enter a feature request');
+      return;
+    }
+
+    setSubmitting(true);
+    setSubmitError(null);
+    setSubmitSuccess(null);
+
+    try {
+      const response = await fetch('/api/features', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          title: 'User Feature Request',
+          description: featureRequest,
+          tags: ['user-submitted']
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to submit feature request');
+      }
+
+      setFeatureRequest('');
+      setSubmitSuccess(true);
+    } catch (error) {
+      console.error('Error submitting feature request:', error);
+      setSubmitError(error instanceof Error ? error.message : 'An unknown error occurred');
+      setSubmitSuccess(false);
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -98,18 +149,21 @@ export default function Futures() {
   // Define upcoming features
   const upcomingFeatures = [
     {
-      id: "email-verification",
-      title: "Email Address Discovery & Verification",
-      description: "Find and verify email addresses associated with a domain.",
-      icon: <FaEnvelope className="text-green-500" />,
-      status: "In Progress",
-      timeline: "Q3 2023",
-      details: `Coming soon, our Email Discovery module will:
-- Extract email addresses from domain's WHOIS information
-- Find common email patterns associated with the domain
-- Perform SMTP verification to validate discovered emails
-- Score emails based on deliverability and validity
-- Search for leaked emails in public breach databases (optional)`
+      id: "geo-performance",
+      title: "Global Performance Analysis",
+      description: "Test domain performance from different regions around the world.",
+      icon: <FaGlobeAmericas className="text-green-500" />,
+      status: "Planned",
+      timeline: "Q4 2024",
+      details: `The planned Geo-Performance module will provide:
+- Performance testing from multiple global regions
+- Real DNS lookup and connection tests
+- Region-specific latency and response times
+- SSL verification and protocol detection
+- Geographic restriction detection
+- Detailed regional connectivity insights
+- Success rate and performance metrics by region
+- Region-based content availability assessment`
     },
     {
       id: "subdomain-enum",
@@ -117,7 +171,7 @@ export default function Futures() {
       description: "Comprehensive subdomain discovery beyond DNS records.",
       icon: <FaNetworkWired className="text-green-500" />,
       status: "Planned",
-      timeline: "Q4 2023",
+      timeline: "Q4 2024",
       details: `The enhanced subdomain module will include:
 - Brute force discovery using larger wordlists
 - Certificate transparency log searching
@@ -132,7 +186,7 @@ export default function Futures() {
       description: "Identify web technologies, frameworks, and services in use.",
       icon: <FaFingerprint className="text-green-500" />,
       status: "Planned",
-      timeline: "Q4 2023",
+      timeline: "Q4 2024",
       details: `This module will detect:
 - Web servers and frameworks
 - JavaScript libraries and frontend technologies
@@ -143,12 +197,28 @@ export default function Futures() {
 - Header analysis and server fingerprinting`
     },
     {
+      id: "email-verification",
+      title: "Email Address Discovery & Verification",
+      description: "Find and verify email addresses associated with a domain.",
+      icon: <FaEnvelope className="text-green-500" />,
+      status: "Planned",
+      timeline: "Q1 2025",
+      details: `Our planned Email Discovery module will provide:
+- Extraction of email addresses from domain's WHOIS information
+- Discovery of registrar-related email addresses
+- SMTP verification to validate discovered emails
+- Real-time email deliverability assessment
+- Email verification status indicators
+- Identification of domain-related contacts
+- Protection against common phishing patterns`
+    },
+    {
       id: "ai-insights",
       title: "AI-Powered Domain Insights",
       description: "Machine learning analysis of domain reputation and patterns.",
       icon: <FaBrain className="text-green-500" />,
       status: "Research",
-      timeline: "Q1 2024",
+      timeline: "Q1 2025",
       details: `Our AI module will provide:
 - Domain age and reputation scoring
 - Malicious activity prediction
@@ -164,7 +234,7 @@ export default function Futures() {
       description: "Identify common security misconfigurations and vulnerabilities.",
       icon: <FaShieldAlt className="text-green-500" />,
       status: "Planned",
-      timeline: "Q4 2023",
+      timeline: "Q3 2024",
       details: `The security module will check for:
 - Missing or misconfigured SPF, DKIM, and DMARC records
 - DNS CAA record validation
@@ -180,7 +250,7 @@ export default function Futures() {
       description: "Programmatic access to domain intelligence features.",
       icon: <FaCode className="text-green-500" />,
       status: "Planned",
-      timeline: "Q1 2024",
+      timeline: "Q1 2025",
       details: `The API will support:
 - RESTful endpoints for all core features
 - Batch processing of multiple domains
@@ -189,6 +259,23 @@ export default function Futures() {
 - OAuth2 authentication
 - Custom report generation
 - Integration with popular security tools`
+    },
+    {
+      id: "historical-analysis",
+      title: "Historical Domain Analysis",
+      description: "Track and analyze domain changes over time.",
+      icon: <FaHistory className="text-green-500" />,
+      status: "Research",
+      timeline: "Q2 2025",
+      details: `The historical analysis module will provide:
+- WHOIS history tracking and changes
+- DNS record evolution over time
+- Previous owners and registrars
+- Registration pattern analysis
+- Historical IP address assignments
+- Website content evolution (via archives)
+- Ownership transfer timeline and details
+- Detection of suspicious rapid changes`
     }
   ];
 
@@ -196,7 +283,7 @@ export default function Futures() {
   const versionHistory = [
     {
       version: "v1.0.0",
-      date: "June 2023",
+      date: "January 2023",
       title: "Initial Release",
       description: "First public release with core domain intelligence features.",
       changes: [
@@ -208,7 +295,7 @@ export default function Futures() {
     },
     {
       version: "v1.1.0",
-      date: "August 2023",
+      date: "March 2023",
       title: "UI Enhancements",
       description: "Major user interface improvements and design updates.",
       changes: [
@@ -220,7 +307,7 @@ export default function Futures() {
     },
     {
       version: "v1.2.0",
-      date: "October 2023",
+      date: "May 2023",
       title: "Performance & Reliability",
       description: "Backend improvements for better reliability and speed.",
       changes: [
@@ -233,7 +320,7 @@ export default function Futures() {
     },
     {
       version: "v1.3.0",
-      date: "Current Version",
+      date: "October 2023",
       title: "Feature Expansion",
       description: "New features and expanded capabilities.",
       changes: [
@@ -242,6 +329,36 @@ export default function Futures() {
         "Added more detailed DNS record information",
         "Expanded WHOIS data presentation",
         "New developer-themed UI with green and black colors"
+      ]
+    },
+    {
+      version: "v1.4.0",
+      date: "February 2024",
+      title: "Advanced Security Features",
+      description: "Enhanced security features and error detection.",
+      changes: [
+        "Improved SSL certificate verification and chain analysis",
+        "Better error handling and retry mechanisms",
+        "Enhanced validation of DNS records",
+        "Expanded subdomain discovery with certificate transparency logs",
+        "New security recommendations based on DNS and SSL findings",
+        "Performance optimizations for faster scanning"
+      ]
+    },
+    {
+      version: "v2.0.0",
+      date: "Current Version (June 2025)",
+      title: "Major Architecture Upgrade",
+      description: "Complete backend rewrite with improved architecture and user experience.",
+      changes: [
+        "Rebuilt core architecture for better scalability",
+        "Streamlined user interface with focus on essential features",
+        "Enhanced WHOIS data parsing and display",
+        "Improved subdomain detection accuracy",
+        "Better SSL certificate analysis with detailed chain verification",
+        "Optimized database structure for faster lookups",
+        "New feature request system for community input",
+        "Added comprehensive documentation and tooltips"
       ]
     }
   ];
@@ -437,7 +554,7 @@ export default function Futures() {
                         className="pl-8 relative"
                       >
                         <div className="absolute left-0 top-1 w-5 h-5 rounded-full bg-green-500 z-10"></div>
-                        <div className={`border border-green-500/30 ${version.version === 'v1.3.0' ? 'bg-green-900/20' : 'bg-black/30'} rounded-md p-4`}>
+                        <div className={`border border-green-500/30 ${version.version === 'v2.0.0' ? 'bg-green-900/20' : 'bg-black/30'} rounded-md p-4`}>
                           <div className="flex justify-between items-center mb-2">
                             <h3 className="font-bold text-green-400">{version.version}</h3>
                             <span className="text-xs text-gray-400">{version.date}</span>
@@ -452,7 +569,7 @@ export default function Futures() {
                               </li>
                             ))}
                           </ul>
-                          {version.version === 'v1.3.0' && (
+                          {version.version === 'v2.0.0' && (
                             <div className="mt-2 text-xs inline-block bg-green-500/20 text-green-400 px-2 py-1 rounded">
                               Current Release
                             </div>
@@ -475,20 +592,56 @@ export default function Futures() {
                   <span>Feature Request</span>
                 </div>
                 <div className="text-xs text-gray-400">
-                  <p>Would you like to request a new feature?</p>
-                  <p className="mt-2">
-                    <span className="text-green-400">$</span> domain-intel --request <span className="text-yellow-400">&quot;your feature idea&quot;</span>
-                  </p>
-                  <div className="mt-4 flex">
-                    <input 
-                      type="text" 
-                      placeholder="Enter your feature request..."
-                      className="flex-grow bg-black/50 border border-green-500/30 rounded-l px-3 py-2 text-green-400 focus:outline-none focus:border-green-500"
-                    />
-                    <button className="bg-green-600/20 hover:bg-green-600/30 border border-green-500/50 text-green-400 px-4 py-2 rounded-r">
-                      <FaSearch className="inline mr-1" /> Submit
-                    </button>
+                  <p>Recently added: <span className="text-green-400">Major Architecture Upgrade</span> with improved performance and user experience!</p>
+                  <p className="mt-2">Would you like to request a new feature?</p>
+                  <div className="mt-2 flex flex-col sm:flex-row gap-3">
+                    <Link href="/feature-requests" className="bg-green-600/20 hover:bg-green-600/30 border border-green-500/50 text-green-400 px-4 py-2 rounded flex items-center justify-center">
+                      <FaSearch className="inline mr-1" /> View & Vote on Feature Requests
+                    </Link>
+                    
+                    <div className="relative flex-1">
+                      <p className="mt-1">
+                        <span className="text-green-400">$</span> domain-intel --request <span className="text-yellow-400">&quot;your feature idea&quot;</span>
+                      </p>
+                      <div className="mt-2 flex">
+                        <input 
+                          type="text" 
+                          placeholder="Enter your feature request..."
+                          className="flex-grow bg-black/50 border border-green-500/30 rounded-l px-3 py-2 text-green-400 focus:outline-none focus:border-green-500"
+                          value={featureRequest}
+                          onChange={handleFeatureRequestChange}
+                          disabled={submitting}
+                        />
+                        <button 
+                          className={`bg-green-600/20 hover:bg-green-600/30 border border-green-500/50 text-green-400 px-4 py-2 rounded-r flex items-center ${submitting ? 'opacity-50 cursor-not-allowed' : ''}`}
+                          onClick={submitFeatureRequest}
+                          disabled={submitting}
+                        >
+                          {submitting ? (
+                            <>
+                              <FaSpinner className="inline mr-1 animate-spin" /> Submitting...
+                            </>
+                          ) : (
+                            <>
+                              <FaSearch className="inline mr-1" /> Submit
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    </div>
                   </div>
+                  
+                  {submitSuccess === true && (
+                    <div className="mt-2 text-green-400 bg-green-400/10 px-2 py-1 rounded">
+                      <FaCheckCircle className="inline mr-1" /> Thank you! Your feature request has been submitted successfully.
+                    </div>
+                  )}
+                  
+                  {submitError && (
+                    <div className="mt-2 text-red-400 bg-red-400/10 px-2 py-1 rounded">
+                      Error: {submitError}
+                    </div>
+                  )}
                 </div>
               </motion.div>
             </div>

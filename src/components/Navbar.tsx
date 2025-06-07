@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { motion } from 'framer-motion';
-import { FaGithub, FaInfoCircle, FaHome, FaRocket, FaSearch } from 'react-icons/fa';
+import { FaGithub, FaInfoCircle, FaHome, FaRocket, FaLightbulb } from 'react-icons/fa';
 import { useState, useEffect } from 'react';
 import { usePathname } from 'next/navigation';
 
@@ -92,14 +92,14 @@ export default function Navbar() {
           </Link>
           
           <Link 
-            href="/results" 
+            href="/feature-requests" 
             className={`px-3 py-2 rounded-md transition-colors inline-flex items-center
-              ${isActive('/results') 
+              ${isActive('/feature-requests') 
                 ? 'text-green-400 bg-green-900/20 border border-green-500/30' 
                 : 'text-gray-300 hover:text-green-400 hover:bg-black/50'}`}
           >
-            <FaSearch className="mr-2" />
-            Results
+            <FaLightbulb className="mr-2" />
+            Requests
           </Link>
           
           <Link 
@@ -160,15 +160,15 @@ export default function Navbar() {
             </Link>
             
             <Link 
-              href="/results" 
+              href="/feature-requests" 
               className={`p-2 rounded transition-colors inline-flex items-center
-                ${isActive('/results') 
+                ${isActive('/feature-requests') 
                   ? 'text-green-400 bg-green-900/20 border border-green-500/30' 
                   : 'text-gray-300 hover:text-green-400'}`}
               onClick={() => setIsOpen(false)}
             >
-              <FaSearch className="mr-2" />
-              Results
+              <FaLightbulb className="mr-2" />
+              Requests
             </Link>
             
             <Link 

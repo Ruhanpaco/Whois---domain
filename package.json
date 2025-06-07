@@ -10,8 +10,11 @@
   },
   "dependencies": {
     "@devmehq/email-validator-js": "^2.0.1",
+    "@fingerprintjs/fingerprintjs": "^4.6.2",
+    "@types/uuid": "^10.0.0",
     "@vercel/analytics": "^1.5.0",
     "axios": "^1.9.0",
+    "check-cert": "^2.0.8",
     "email-domain-verifier": "^1.0.6",
     "framer-motion": "^12.15.0",
     "mongodb": "^6.16.0",
@@ -20,6 +23,8 @@
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-icons": "^5.5.0",
+    "ssl-checker": "^2.0.10",
+    "uuid": "^11.1.0",
     "whois-json": "^2.0.4"
   },
   "devDependencies": {

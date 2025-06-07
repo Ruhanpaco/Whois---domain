@@ -3,7 +3,7 @@
 import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { motion } from 'framer-motion';
-import { FaServer, FaGlobe, FaShieldAlt, FaTerminal, FaArrowLeft, FaCopy, FaClock, FaCalendarAlt, FaEnvelope, FaExclamationTriangle, FaCheckCircle, FaTimesCircle, FaQuestionCircle, FaSitemap, FaLink, FaRocket, FaCode } from 'react-icons/fa';
+import { FaServer, FaGlobe, FaShieldAlt, FaTerminal, FaArrowLeft, FaCopy, FaClock, FaCalendarAlt, FaExclamationTriangle, FaCheckCircle, FaTimesCircle, FaQuestionCircle, FaSitemap, FaLink, FaRocket, FaCode, FaHistory, FaRedoAlt } from 'react-icons/fa';
 import Link from 'next/link';
 
 // Define interfaces for the different data types
@@ -39,6 +39,7 @@ interface DnsRecord {
   ttl?: number;
   value: string;
   priority?: number;
+  type?: string;
 }
 
 interface DnsData {
@@ -49,74 +50,115 @@ interface DnsData {
   txt?: DnsRecord[];
 }
 
-interface SslData {
+interface SslInfo {
   valid: boolean;
+  error?: string;
   issuer?: string;
   subject?: string;
   validFrom?: string;
   validTo?: string;
   daysRemaining?: number;
-  serialNumber?: string;
   protocol?: string;
   cipher?: string;
-  error?: string;
-}
-
-interface EmailVerification {
-  valid: boolean;
-  status: string;
-  message: string;
-}
-
-interface EmailAddress {
-  address: string;
-  status: string;
-  verification: EmailVerification;
-}
-
-interface EmailData {
-  domainEmails?: EmailAddress[];
-  thirdPartyEmails?: EmailAddress[];
-  validEmails?: EmailAddress[];
-  mailServers?: {
-    ttl?: number;
-    priority: number;
-    host: string;
-  }[];
-  spfRecord?: string;
-  dmarcRecord?: string;
+  serialNumber?: string;
+  fingerprint?: string;
+  issuerDetails?: any;
+  redirectTo?: string;
 }
 
 interface Subdomain {
   name: string;
-  ip: string;
-  sslInfo?: {
-    valid: boolean;
-    issuer: string;
-    validTo: string;
-    protocol: string;
-    error?: string;
-  };
+  ip?: string;
+  sslInfo?: SslInfo;
+  available?: boolean;
+  error?: string;
+  httpOnly?: boolean;
 }
 
-// Get the email verification icon based on status
-const getEmailStatusIcon = (status: string) => {
-  switch (status) {
-    case 'valid':
-      return <FaCheckCircle className="text-green-400" title="Verified" />;
-    case 'invalid':
-      return <FaTimesCircle className="text-red-400" title="Invalid" />;
-    default:
-      return <FaQuestionCircle className="text-yellow-400" title="Unverified" />;
-  }
-};
+// Add the CertificateInfo interface after the other interfaces
+interface CertificateInfo {
+  id: string;
+  issuer_name: string;
+  common_name: string;
+  name_value: string;
+  entry_timestamp: string;
+  not_before: string;
+  not_after: string;
+  serial_number: string;
+}
 
-// Get the email status text based on verification results
-const getEmailStatusText = (verification: EmailVerification) => {
-  if (!verification) return 'Unknown';
-  if (verification.valid) return 'Valid';
-  return verification.message || verification.status || 'Invalid';
-};
+// After adding the other interfaces, add this new interface for geo performance data
+interface GeoPerformanceData {
+  domain: string;
+  metadata: {
+    testStartTime: string;
+    testEndTime: string;
+    testDuration: number;
+    testerIp: string;
+    testerRegion: string;
+    quickMode: boolean;
+  };
+  analysis: {
+    successRate: number;
+    overallRating: string;
+    bestRegion: string;
+    bestLatency: number | null;
+    worstRegion: string;
+    worstLatency: number | null;
+    ipAddresses: string[];
+    regionPerformance: {
+      [key: string]: {
+        totalLatency: number;
+        count: number;
+        successCount: number;
+        averageLatency: number;
+        successRate: number;
+        protocols: {
+          [key: string]: number;
+        };
+        ipAddresses: string[];
+        dominantProtocol: string;
+        errorTypes?: {
+          [key: string]: number;
+        };
+        dominantErrorType?: string;
+      }
+    };
+    failedLocations: Array<{
+      name: string;
+      region: string;
+      error: string;
+      errorType: string;
+      errorDetails?: string;
+    }>;
+    restrictedRegions?: Array<{
+      region: string;
+      successRate: number;
+      errorTypes: {
+        [key: string]: number;
+      };
+    }>;
+  };
+  results: Array<{
+    success: boolean;
+    location: {
+      id: string;
+      name: string;
+      region: string;
+      emoji: string;
+    };
+    latency: number;
+    dnsLookupTime?: number;
+    connectionTime?: number;
+    sslVerificationTime?: number;
+    performanceRating?: string;
+    error?: string;
+    errorType?: string;
+    errorDetails?: string;
+    ipAddress?: string;
+    protocol?: string;
+  }>;
+}
 
 // Loading component
 function ResultsPageLoader() {
@@ -137,45 +179,237 @@ function ResultsPageContent() {
   const searchParams = useSearchParams();
   const domain = searchParams.get('domain') || 'example.com';
   const [loading, setLoading] = useState(true);
+  const [loadingStatus, setLoadingStatus] = useState<string>('Initializing...');
   const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState('whois');
+  const [activeTab, setActiveTab] = useState<'whois' | 'dns' | 'ssl' | 'email' | 'subdomains' | 'certhistory' | 'geoperformance'>('whois');
   const [whoisData, setWhoisData] = useState<WhoisData | null>(null);
   const [dnsData, setDnsData] = useState<DnsData | null>(null);
-  const [sslData, setSslData] = useState<SslData | null>(null);
-  const [emailData, setEmailData] = useState<EmailData | null>(null);
+  const [sslData, setSslData] = useState<SslInfo | null>(null);
   const [subdomains, setSubdomains] = useState<Subdomain[]>([]);
+  const [certHistoryData, setCertHistoryData] = useState<CertificateInfo[]>([]);
+  const [geoPerformanceData, setGeoPerformanceData] = useState<GeoPerformanceData | null>(null);
+  const [apiErrors, setApiErrors] = useState<{[key: string]: boolean}>({
+    whois: false,
+    dns: false,
+    ssl: false,
+    subdomains: false,
+    certHistory: false,
+    geoPerformance: false
+  });
+  // Add state to track which subdomains are being rechecked
+  const [recheckingSSL, setRecheckingSSL] = useState<{[key: string]: boolean}>({});
+  
+  // Add state to track loading progress
+  const [loadingProgress, setLoadingProgress] = useState<{
+    total: number;
+    completed: number;
+    current: string;
+  }>({
+    total: 6, // WHOIS, DNS, SSL, Subdomains, CertHistory, GeoPerformance
+    completed: 0,
+    current: 'Preparing to fetch data...'
+  });
+  
+  // Add timer state
+  const [elapsedTime, setElapsedTime] = useState<number>(0);
+  const [timerInterval, setTimerInterval] = useState<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     const fetchData = async () => {
       setLoading(true);
       setError(null);
+      setLoadingStatus('Initializing checks...');
+      setLoadingProgress({
+        total: 6, // WHOIS, DNS, SSL, Subdomains, CertHistory, GeoPerformance
+        completed: 0,
+        current: 'Starting domain analysis'
+      });
+      
+      // Start the timer
+      const startTime = Date.now();
+      const timer = setInterval(() => {
+        setElapsedTime(Math.floor((Date.now() - startTime) / 1000));
+      }, 1000);
+      setTimerInterval(timer);
+      
+      setApiErrors({
+        whois: false,
+        dns: false,
+        ssl: false,
+        subdomains: false,
+        certHistory: false,
+        geoPerformance: false
+      });
       
       try {
-        const response = await fetch(`/api/V1/GET/domain?domain=${encodeURIComponent(domain)}`);
+        // Create separate fetch promises so we can handle individual failures
+        setLoadingStatus('Fetching WHOIS information...');
+        setLoadingProgress(prev => ({...prev, current: 'Checking domain registration'}));
+        const whoisPromise = fetch(`/api/V1/GET/whois?domain=${encodeURIComponent(domain)}`);
         
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.error || 'Failed to fetch domain information');
+        setLoadingStatus('Fetching DNS records...');
+        setLoadingProgress(prev => ({...prev, current: 'Querying DNS servers', completed: 1}));
+        const dnsPromise = fetch(`/api/V1/GET/dns?domain=${encodeURIComponent(domain)}`);
+        
+        // Change the order: fetch subdomains before SSL
+        setLoadingStatus('Discovering subdomains...');
+        setLoadingProgress(prev => ({...prev, current: 'Searching for subdomains', completed: 2}));
+        const subdomainsPromise = fetch(`/api/V1/GET/subdomains?domain=${encodeURIComponent(domain)}`);
+        
+        // Move SSL check after subdomains
+        setLoadingStatus('Checking SSL certificate...');
+        setLoadingProgress(prev => ({...prev, current: 'Verifying SSL certificate', completed: 3}));
+        
+        // Start tracking SSL check time specifically
+        const sslStartTime = Date.now();
+        let sslElapsedTime = 0;
+        const sslTimer = setInterval(() => {
+          sslElapsedTime = Math.floor((Date.now() - sslStartTime) / 1000);
+          setLoadingStatus(`Verifying SSL certificate... (${sslElapsedTime}s)`);
+        }, 1000);
+        
+        const sslPromise = fetch(`/api/V1/GET/ssl?domain=${encodeURIComponent(domain)}&isMainDomain=true`)
+          .finally(() => {
+            // Clear the SSL timer when done
+            clearInterval(sslTimer);
+          });
+        
+        setLoadingStatus('Checking certificate history...');
+        setLoadingProgress(prev => ({...prev, current: 'Analyzing certificate transparency logs', completed: 4}));
+        const certHistoryPromise = fetch(`/api/V1/GET/certhistory?domain=${encodeURIComponent(domain)}`);
+        
+        // Add geo performance check
+        setLoadingStatus('Analyzing global performance...');
+        setLoadingProgress(prev => ({...prev, current: 'Testing domain from global locations', completed: 5}));
+        const geoPerformancePromise = fetch(`/api/V1/GET/geoperformance?domain=${encodeURIComponent(domain)}`);
+        
+        // Execute all fetches in parallel
+        const [whoisResponse, dnsResponse, subdomainsResponse, sslResponse, certHistoryResponse, geoPerformanceResponse] = 
+          await Promise.all([
+            whoisPromise.catch(err => {
+              console.error('Error fetching WHOIS data:', err);
+              setApiErrors(prev => ({...prev, whois: true}));
+              return new Response(JSON.stringify({ error: 'Failed to fetch WHOIS data' }));
+            }),
+            dnsPromise.catch(err => {
+              console.error('Error fetching DNS data:', err);
+              setApiErrors(prev => ({...prev, dns: true}));
+              return new Response(JSON.stringify({ error: 'Failed to fetch DNS data' }));
+            }),
+            subdomainsPromise.catch(err => {
+              console.error('Error fetching subdomains data:', err);
+              setApiErrors(prev => ({...prev, subdomains: true}));
+              return new Response(JSON.stringify({ error: 'Failed to fetch subdomains data' }));
+            }),
+            sslPromise.catch(err => {
+              console.error('Error fetching SSL data:', err);
+              setApiErrors(prev => ({...prev, ssl: true}));
+              return new Response(JSON.stringify({ error: 'Failed to fetch SSL data' }));
+            }),
+            certHistoryPromise.catch(err => {
+              console.error('Error fetching certificate history data:', err);
+              setApiErrors(prev => ({...prev, certHistory: true}));
+              return new Response(JSON.stringify({ error: 'Failed to fetch certificate history data' }));
+            }),
+            geoPerformancePromise.catch(err => {
+              console.error('Error fetching geo performance data:', err);
+              setApiErrors(prev => ({...prev, geoPerformance: true}));
+              return new Response(JSON.stringify({ error: 'Failed to fetch geo performance data' }));
+            })
+          ]);
+        
+        // Process each response individually, with error handling
+        const processResponse = async (response: Response, dataType: string) => {
+          try {
+            if (!response.ok) {
+              console.error(`Error with ${dataType} response:`, response.status, response.statusText);
+              setApiErrors(prev => ({...prev, [dataType]: true}));
+              return null;
+            }
+            return await response.json();
+          } catch (err) {
+            console.error(`Error parsing ${dataType} JSON:`, err);
+            setApiErrors(prev => ({...prev, [dataType]: true}));
+            return null;
+          }
+        };
+        
+        setLoadingStatus('Processing WHOIS data...');
+        // Parse responses with error handling
+        const whoisDataResult = await processResponse(whoisResponse, 'whois');
+        
+        setLoadingStatus('Processing DNS data...');
+        const dnsDataResult = await processResponse(dnsResponse, 'dns');
+        
+        setLoadingStatus('Processing subdomains data...');
+        const subdomainsDataResult = await processResponse(subdomainsResponse, 'subdomains');
+        
+        setLoadingStatus('Processing SSL data...');
+        const sslDataResult = await processResponse(sslResponse, 'ssl');
+        
+        setLoadingStatus('Processing certificate history...');
+        const certHistoryDataResult = await processResponse(certHistoryResponse, 'certHistory');
+        
+        setLoadingStatus('Processing geo performance data...');
+        const geoPerformanceDataResult = await processResponse(geoPerformanceResponse, 'geoPerformance');
+        
+        console.log('WHOIS Data:', whoisDataResult);
+        console.log('DNS Data:', dnsDataResult);
+        console.log('SSL Data:', sslDataResult);
+        console.log('Subdomains Data:', subdomainsDataResult);
+        console.log('Certificate History Data:', certHistoryDataResult);
+        console.log('Geo Performance Data:', geoPerformanceDataResult);
+        
+        // Set data safely with null fallbacks
+        setWhoisData(whoisDataResult?.whoisData || null);
+        setDnsData(dnsDataResult?.dnsRecords || null);
+        setSslData(sslDataResult?.sslInfo || null);
+        
+        // Process subdomains and check if the main domain is included
+        const subdomainsData = subdomainsDataResult?.subdomains || [];
+        setSubdomains(subdomainsData);
+        
+        // If main domain SSL check failed but we have it in subdomains, use that data
+        if ((!sslDataResult || !sslDataResult.sslInfo) && subdomainsData.length > 0) {
+          const mainDomainInSubdomains = subdomainsData.find((sub: Subdomain) => sub.name === domain);
+          if (mainDomainInSubdomains && mainDomainInSubdomains.sslInfo) {
+            setSslData(mainDomainInSubdomains.sslInfo);
+          }
         }
         
-        const data = await response.json();
+        setCertHistoryData(certHistoryDataResult?.certificates || []);
+        setGeoPerformanceData(geoPerformanceDataResult || null);
         
-        console.log('SSL Data:', data.sslInfo);
+        setLoadingProgress(prev => ({...prev, completed: 6, current: 'Complete'}));
+        setLoadingStatus(`Domain analysis complete in ${Math.floor((Date.now() - startTime) / 1000)}s`);
         
-        setWhoisData(data.whoisData || null);
-        setDnsData(data.dnsRecords || null);
-        setSslData(data.sslInfo || null);
-        setEmailData(data.emailData || null);
-        setSubdomains(data.subdomains || []);
+        // If all APIs failed, show a general error
+        const allFailed = Object.values(apiErrors).every(value => value === true);
+        if (allFailed) {
+          setError('Failed to fetch any domain information. Please try again later.');
+        }
       } catch (error) {
-        console.error('Error fetching domain data:', error);
+        console.error('Error in overall fetch process:', error);
         setError(error instanceof Error ? error.message : 'An unknown error occurred');
+        setLoadingStatus(`Error encountered during analysis after ${Math.floor((Date.now() - startTime) / 1000)}s`);
       } finally {
+        // Clear the timer
+        if (timerInterval) {
+          clearInterval(timerInterval);
+          setTimerInterval(null);
+        }
         setLoading(false);
       }
     };
 
     fetchData();
+    
+    // Cleanup timer on unmount
+    return () => {
+      if (timerInterval) {
+        clearInterval(timerInterval);
+      }
+    };
   }, [domain]);
 
   const formatDate = (dateString?: string) => {
@@ -203,6 +437,94 @@ function ResultsPageContent() {
     if (!text) return;
     navigator.clipboard.writeText(text);
     // Could add a toast notification here
+  };
+
+  // Function to retry SSL check for a specific subdomain
+  const retrySSLCheck = async (subdomain: string): Promise<SslInfo | null> => {
+    // Track retry time
+    const retryStartTime = Date.now();
+    let retryElapsedTime = 0;
+    
+    try {
+      // Set up a timer for this specific check
+      const retryTimer = setInterval(() => {
+        retryElapsedTime = Math.floor((Date.now() - retryStartTime) / 1000);
+        setLoadingStatus(`Retrying SSL check for ${subdomain}... (${retryElapsedTime}s)`);
+      }, 1000);
+      
+      // If it's the main domain, pass both isMainDomain and forceRetry flags
+      const isMainDomain = subdomain === domain;
+      let url = `/api/V1/GET/ssl?domain=${encodeURIComponent(subdomain)}`;
+      
+      if (isMainDomain) {
+        url += '&isMainDomain=true&forceRetry=true';
+      }
+      
+      setLoadingStatus(`Connecting to ${subdomain} for SSL verification...`);
+      const response = await fetch(url);
+      if (!response.ok) {
+        throw new Error(`Failed to fetch SSL data: ${response.status}`);
+      }
+      
+      setLoadingStatus(`Processing SSL certificate for ${subdomain}...`);
+      const data = await response.json();
+      
+      // Clear the timer
+      clearInterval(retryTimer);
+      setLoadingStatus(`SSL check for ${subdomain} completed in ${retryElapsedTime}s`);
+      
+      return data.sslInfo || null;
+    } catch (error) {
+      console.error(`Error retrying SSL check for ${subdomain}:`, error);
+      setLoadingStatus(`SSL check failed for ${subdomain} after ${retryElapsedTime}s`);
+      return null;
+    }
+  };
+
+  // Function to handle retrying SSL for a subdomain
+  const handleRetrySSL = async (subdomain: string, index: number) => {
+    // Mark this subdomain as rechecking
+    setRecheckingSSL(prev => ({ ...prev, [subdomain]: true }));
+    
+    try {
+      // Show status message
+      setLoadingStatus(`Retrying SSL check for ${subdomain}...`);
+      const sslInfo = await retrySSLCheck(subdomain);
+      
+      if (sslInfo) {
+        // If this is the main domain (index = -1), just update the main SSL data
+        if (index === -1) {
+          setSslData(sslInfo);
+        } else {
+          // Update the subdomain's SSL info
+          const updatedSubdomains = [...subdomains];
+          updatedSubdomains[index] = {
+            ...updatedSubdomains[index],
+            sslInfo
+          };
+          setSubdomains(updatedSubdomains);
+          
+          // If this is the main domain in the subdomains list, also update the main SSL data
+          if (subdomain === domain) {
+            setSslData(sslInfo);
+          }
+        }
+        
+        setLoadingStatus(`Updated SSL information for ${subdomain}`);
+      } else {
+        setLoadingStatus(`Failed to get SSL information for ${subdomain}`);
+      }
+    } catch (error) {
+      console.error(`Failed to recheck SSL for ${subdomain}:`, error);
+      setLoadingStatus(`Error checking SSL for ${subdomain}`);
+    } finally {
+      // Clear the rechecking state
+      setRecheckingSSL(prev => ({ ...prev, [subdomain]: false }));
+      // Reset loading status after a delay
+      setTimeout(() => {
+        setLoadingStatus('Domain analysis complete');
+      }, 3000);
+    }
   };
 
   const container = {
@@ -293,6 +615,79 @@ function ResultsPageContent() {
           <div className="flex flex-col items-center justify-center py-32">
             <div className="w-16 h-16 border-4 border-green-500/30 border-t-green-500 rounded-full animate-spin"></div>
             <p className="mt-4 text-gray-400">Fetching information for {domain}...</p>
+            <p className="mt-2 text-green-400">{loadingStatus}</p>
+            
+            {/* Timer display */}
+            <p className="mt-2 text-yellow-400 font-mono">Time elapsed: {elapsedTime}s</p>
+            
+            {/* Progress bar */}
+            <div className="w-full max-w-md mt-6">
+              <div className="bg-gray-800 h-2 rounded-full overflow-hidden">
+                <div 
+                  className="bg-green-500 h-full transition-all duration-300 ease-in-out"
+                  style={{ width: `${(loadingProgress.completed / loadingProgress.total) * 100}%` }}
+                ></div>
+              </div>
+              <p className="mt-2 text-xs text-gray-500 text-center">{loadingProgress.current}</p>
+            </div>
+            
+            {/* Progress details */}
+            <div className="mt-8 bg-gray-900/50 p-4 rounded-md border border-green-500/20 max-w-md w-full">
+              <h3 className="text-xs uppercase tracking-wider text-green-500 mb-3">Analysis in Progress</h3>
+              <ul className="space-y-2 text-xs">
+                <li className={`flex items-center ${loadingProgress.completed >= 1 ? 'text-green-400' : 'text-gray-500'}`}>
+                  <span className={`w-4 h-4 mr-2 rounded-full flex items-center justify-center ${
+                    loadingProgress.completed >= 1 ? 'bg-green-900/50 text-green-500' : 'bg-gray-800'
+                  }`}>
+                    {loadingProgress.completed >= 1 ? '✓' : '1'}
+                  </span>
+                  WHOIS Registration Data
+                </li>
+                <li className={`flex items-center ${loadingProgress.completed >= 2 ? 'text-green-400' : 'text-gray-500'}`}>
+                  <span className={`w-4 h-4 mr-2 rounded-full flex items-center justify-center ${
+                    loadingProgress.completed >= 2 ? 'bg-green-900/50 text-green-500' : 'bg-gray-800'
+                  }`}>
+                    {loadingProgress.completed >= 2 ? '✓' : '2'}
+                  </span>
+                  DNS Records
+                </li>
+                <li className={`flex items-center ${loadingProgress.completed >= 3 ? 'text-green-400' : 'text-gray-500'}`}>
+                  <span className={`w-4 h-4 mr-2 rounded-full flex items-center justify-center ${
+                    loadingProgress.completed >= 3 ? 'bg-green-900/50 text-green-500' : 'bg-gray-800'
+                  }`}>
+                    {loadingProgress.completed >= 3 ? '✓' : '3'}
+                  </span>
+                  SSL Certificate Analysis
+                </li>
+                <li className={`flex items-center ${loadingProgress.completed >= 4 ? 'text-green-400' : 'text-gray-500'}`}>
+                  <span className={`w-4 h-4 mr-2 rounded-full flex items-center justify-center ${
+                    loadingProgress.completed >= 4 ? 'bg-green-900/50 text-green-500' : 'bg-gray-800'
+                  }`}>
+                    {loadingProgress.completed >= 4 ? '✓' : '4'}
+                  </span>
+                  Subdomain Discovery
+                </li>
+                <li className={`flex items-center ${loadingProgress.completed >= 5 ? 'text-green-400' : 'text-gray-500'}`}>
+                  <span className={`w-4 h-4 mr-2 rounded-full flex items-center justify-center ${
+                    loadingProgress.completed >= 5 ? 'bg-green-900/50 text-green-500' : 'bg-gray-800'
+                  }`}>
+                    {loadingProgress.completed >= 5 ? '✓' : '5'}
+                  </span>
+                  Certificate Transparency Analysis
+                </li>
+                <li className={`flex items-center ${loadingProgress.completed >= 6 ? 'text-green-400' : 'text-gray-500'}`}>
+                  <span className={`w-4 h-4 mr-2 rounded-full flex items-center justify-center ${
+                    loadingProgress.completed >= 6 ? 'bg-green-900/50 text-green-500' : 'bg-gray-800'
+                  }`}>
+                    {loadingProgress.completed >= 6 ? '✓' : '6'}
+                  </span>
+                  Geo Performance Analysis
+                </li>
+              </ul>
+              <p className="mt-4 text-xs text-gray-500 italic">
+                SSL certificate checks may take longer due to connection timeouts
+              </p>
+            </div>
           </div>
         ) : error ? (
           <motion.div 
@@ -315,10 +710,11 @@ function ResultsPageContent() {
                     activeTab === 'whois'
                       ? 'bg-green-500/20 text-green-400 border border-green-500/30'
                       : 'text-gray-400 hover:text-green-400 hover:bg-black/30'
-                  }`}
+                  } ${apiErrors.whois ? 'opacity-50' : ''}`}
+                  disabled={apiErrors.whois}
                 >
                   <FaServer className="mr-2" />
-                  WHOIS
+                  WHOIS {apiErrors.whois && <FaExclamationTriangle className="ml-1 text-yellow-500" title="Data fetch failed" />}
                 </button>
                 <button
                   onClick={() => setActiveTab('dns')}
@@ -326,10 +722,11 @@ function ResultsPageContent() {
                     activeTab === 'dns'
                       ? 'bg-green-500/20 text-green-400 border border-green-500/30'
                       : 'text-gray-400 hover:text-green-400 hover:bg-black/30'
-                  }`}
+                  } ${apiErrors.dns ? 'opacity-50' : ''}`}
+                  disabled={apiErrors.dns}
                 >
                   <FaGlobe className="mr-2" />
-                  DNS
+                  DNS {apiErrors.dns && <FaExclamationTriangle className="ml-1 text-yellow-500" title="Data fetch failed" />}
                 </button>
                 <button
                   onClick={() => setActiveTab('ssl')}
@@ -337,10 +734,11 @@ function ResultsPageContent() {
                     activeTab === 'ssl'
                       ? 'bg-green-500/20 text-green-400 border border-green-500/30'
                       : 'text-gray-400 hover:text-green-400 hover:bg-black/30'
-                  }`}
+                  } ${apiErrors.ssl ? 'opacity-50' : ''}`}
+                  disabled={apiErrors.ssl}
                 >
                   <FaShieldAlt className="mr-2" />
-                  SSL
+                  SSL {apiErrors.ssl && <FaExclamationTriangle className="ml-1 text-yellow-500" title="Data fetch failed" />}
                 </button>
                 <button
                   onClick={() => setActiveTab('subdomains')}
@@ -348,24 +746,57 @@ function ResultsPageContent() {
                     activeTab === 'subdomains'
                       ? 'bg-green-500/20 text-green-400 border border-green-500/30'
                       : 'text-gray-400 hover:text-green-400 hover:bg-black/30'
-                  }`}
+                  } ${apiErrors.subdomains ? 'opacity-50' : ''}`}
+                  disabled={apiErrors.subdomains}
                 >
                   <FaSitemap className="mr-2" />
-                  Subdomains
+                  Subdomains {apiErrors.subdomains && <FaExclamationTriangle className="ml-1 text-yellow-500" title="Data fetch failed" />}
                 </button>
                 <button
-                  onClick={() => setActiveTab('email')}
+                  onClick={() => setActiveTab('certhistory')}
                   className={`px-4 py-3 rounded-md flex items-center ${
-                    activeTab === 'email'
+                    activeTab === 'certhistory'
                       ? 'bg-green-500/20 text-green-400 border border-green-500/30'
                       : 'text-gray-400 hover:text-green-400 hover:bg-black/30'
-                  }`}
+                  } ${apiErrors.certHistory ? 'opacity-50' : ''}`}
+                  disabled={apiErrors.certHistory}
                 >
-                  <FaEnvelope className="mr-2" />
-                  Email
+                  <FaHistory className="mr-2" />
+                  Cert History {apiErrors.certHistory && <FaExclamationTriangle className="ml-1 text-yellow-500" title="Data fetch failed" />}
+                </button>
+                <button
+                  onClick={() => setActiveTab('geoperformance')}
+                  className={`px-4 py-3 rounded-md flex items-center ${
+                    activeTab === 'geoperformance'
+                      ? 'bg-green-500/20 text-green-400 border border-green-500/30'
+                      : 'text-gray-400 hover:text-green-400 hover:bg-black/30'
+                  } ${apiErrors.geoPerformance ? 'opacity-50' : ''}`}
+                  disabled={apiErrors.geoPerformance}
+                >
+                  <FaRocket className="mr-2" />
+                  Geo Performance {apiErrors.geoPerformance && <FaExclamationTriangle className="ml-1 text-yellow-500" title="Data fetch failed" />}
                 </button>
               </div>
             </div>
+
+            {/* Show a partial error banner if some APIs failed but not all */}
+            {Object.values(apiErrors).some(value => value) && !Object.values(apiErrors).every(value => value) && (
+              <motion.div 
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="bg-yellow-900/20 border border-yellow-500/30 rounded-lg p-4 mb-6"
+              >
+                <div className="flex items-center">
+                  <FaExclamationTriangle className="text-yellow-400 mr-3" size={20} />
+                  <div>
+                    <h3 className="text-sm font-semibold text-yellow-400">Partial Data Available</h3>
+                    <p className="text-gray-300 text-xs mt-1">
+                      Some information could not be retrieved. Disabled tabs indicate unavailable data.
+                    </p>
+                  </div>
+                </div>
+              </motion.div>
+            )}
 
             {activeTab === 'whois' && whoisData && (
               <motion.div
@@ -456,7 +887,7 @@ function ResultsPageContent() {
                     </div>
                   </div>
                 </motion.div>
-
+                
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
                   <motion.div variants={item}>
                     <h3 className="text-lg mb-3 text-green-500 font-mono flex items-center">
@@ -632,132 +1063,102 @@ function ResultsPageContent() {
                       <FaGlobe className="mr-3 text-green-500" />
                       DNS Records
                     </h2>
-                    <div className="px-3 py-1 bg-gray-800 rounded-full text-sm text-green-500 font-mono">
-                      {domain}
-                    </div>
                   </div>
                   
-                  <div className="space-y-6">
-                    {dnsData.a && dnsData.a.length > 0 && (
-                      <div className="bg-gray-800 p-4 rounded-md border border-green-500/30 hover:border-green-500 transition-colors">
-                        <h3 className="text-lg text-green-500 mb-3 font-mono flex items-center">
-                          <FaTerminal className="mr-2" /> A Records
-                        </h3>
-                        <div className="terminal-text mb-2">$ dig {domain} A</div>
-                        <div className="border-t border-green-500/30 pt-2 mt-2">
-                          {dnsData.a.map((record: any, index: number) => (
-                            <div key={index} className="font-mono text-sm text-gray-300 mb-1 flex justify-between">
-                              <div>
-                                <span className="text-gray-400">{record.name}</span> {record.ttl} IN A
-                              </div>
-                              <span className="text-green-500">{record.value}</span>
-                            </div>
-                          ))}
-                        </div>
+                  {/* A Records */}
+                  {dnsData.a && dnsData.a.length > 0 && (
+                    <div className="bg-gray-800 p-4 rounded-md mb-6">
+                      <h3 className="text-lg text-green-500 mb-4 font-mono">A Records (IPv4)</h3>
+                      <div className="terminal-text mb-2">$ dig {domain} A</div>
+                      <div className="border-t border-green-500/30 pt-2 mt-2">
+                        {dnsData.a.map((record, index) => (
+                          <div key={index} className="font-mono text-sm text-gray-300 mb-1">
+                            <span className="text-gray-400">{record.name}</span> {record.ttl || 3600} IN A <span className="text-green-500">{record.value}</span>
+                          </div>
+                        ))}
                       </div>
-                    )}
-
-                    {dnsData.aaaa && dnsData.aaaa.length > 0 && (
-                      <div className="bg-gray-800 p-4 rounded-md border border-green-500/30 hover:border-green-500 transition-colors">
-                        <h3 className="text-lg text-green-500 mb-3 font-mono flex items-center">
-                          <FaTerminal className="mr-2" /> AAAA Records
-                        </h3>
-                        <div className="terminal-text mb-2">$ dig {domain} AAAA</div>
-                        <div className="border-t border-green-500/30 pt-2 mt-2">
-                          {dnsData.aaaa.map((record: any, index: number) => (
-                            <div key={index} className="font-mono text-sm text-gray-300 mb-1 flex justify-between">
-                              <div>
-                                <span className="text-gray-400">{record.name}</span> {record.ttl} IN AAAA
-                              </div>
-                              <span className="text-green-500">{record.value}</span>
-                            </div>
-                          ))}
-                        </div>
+                    </div>
+                  )}
+                  
+                  {/* AAAA Records */}
+                  {dnsData.aaaa && dnsData.aaaa.length > 0 && (
+                    <div className="bg-gray-800 p-4 rounded-md mb-6">
+                      <h3 className="text-lg text-green-500 mb-4 font-mono">AAAA Records (IPv6)</h3>
+                      <div className="terminal-text mb-2">$ dig {domain} AAAA</div>
+                      <div className="border-t border-green-500/30 pt-2 mt-2">
+                        {dnsData.aaaa.map((record, index) => (
+                          <div key={index} className="font-mono text-sm text-gray-300 mb-1">
+                            <span className="text-gray-400">{record.name}</span> {record.ttl || 3600} IN AAAA <span className="text-green-500">{record.value}</span>
+                          </div>
+                        ))}
                       </div>
-                    )}
-
-                    {dnsData.mx && dnsData.mx.length > 0 && (
-                      <div className="bg-gray-800 p-4 rounded-md border border-green-500/30 hover:border-green-500 transition-colors">
-                        <h3 className="text-lg text-green-500 mb-3 font-mono flex items-center">
-                          <FaTerminal className="mr-2" /> MX Records
-                        </h3>
-                        <div className="terminal-text mb-2">$ dig {domain} MX</div>
-                        <div className="border-t border-green-500/30 pt-2 mt-2">
-                          {dnsData.mx.map((record: any, index: number) => (
-                            <div key={index} className="font-mono text-sm text-gray-300 mb-1 flex justify-between">
-                              <div>
-                                <span className="text-gray-400">{record.name}</span> {record.ttl} IN MX {record.priority}
-                              </div>
-                              <span className="text-green-500">{record.value}</span>
-                            </div>
-                          ))}
-                        </div>
+                    </div>
+                  )}
+                  
+                  {/* MX Records */}
+                  {dnsData.mx && dnsData.mx.length > 0 && (
+                    <div className="bg-gray-800 p-4 rounded-md mb-6">
+                      <h3 className="text-lg text-green-500 mb-4 font-mono">MX Records</h3>
+                      <div className="terminal-text mb-2">$ dig {domain} MX</div>
+                      <div className="border-t border-green-500/30 pt-2 mt-2">
+                        {dnsData.mx.map((record, index) => (
+                          <div key={index} className="font-mono text-sm text-gray-300 mb-1">
+                            <span className="text-gray-400">{record.name}</span> {record.ttl || 3600} IN MX {record.priority} <span className="text-green-500">{record.value}</span>
+                          </div>
+                        ))}
                       </div>
-                    )}
-
-                    {dnsData.ns && dnsData.ns.length > 0 && (
-                      <div className="bg-gray-800 p-4 rounded-md border border-green-500/30 hover:border-green-500 transition-colors">
-                        <h3 className="text-lg text-green-500 mb-3 font-mono flex items-center">
-                          <FaTerminal className="mr-2" /> NS Records
-                        </h3>
-                        <div className="terminal-text mb-2">$ dig {domain} NS</div>
-                        <div className="border-t border-green-500/30 pt-2 mt-2">
-                          {dnsData.ns.map((record: any, index: number) => (
-                            <div key={index} className="font-mono text-sm text-gray-300 mb-1 flex justify-between">
-                              <div>
-                                <span className="text-gray-400">{record.name}</span> {record.ttl} IN NS
-                              </div>
-                              <span className="text-green-500">{record.value}</span>
-                            </div>
-                          ))}
-                        </div>
+                    </div>
+                  )}
+                  
+                  {/* NS Records */}
+                  {dnsData.ns && dnsData.ns.length > 0 && (
+                    <div className="bg-gray-800 p-4 rounded-md mb-6">
+                      <h3 className="text-lg text-green-500 mb-4 font-mono">NS Records</h3>
+                      <div className="terminal-text mb-2">$ dig {domain} NS</div>
+                      <div className="border-t border-green-500/30 pt-2 mt-2">
+                        {dnsData.ns.map((record, index) => (
+                          <div key={index} className="font-mono text-sm text-gray-300 mb-1">
+                            <span className="text-gray-400">{record.name}</span> {record.ttl || 3600} IN NS <span className="text-green-500">{record.value}</span>
+                          </div>
+                        ))}
                       </div>
-                    )}
-
-                    {dnsData.txt && dnsData.txt.length > 0 && (
-                      <div className="bg-gray-800 p-4 rounded-md border border-green-500/30 hover:border-green-500 transition-colors">
-                        <h3 className="text-lg text-green-500 mb-3 font-mono flex items-center">
-                          <FaTerminal className="mr-2" /> TXT Records
-                        </h3>
-                        <div className="terminal-text mb-2">$ dig {domain} TXT</div>
-                        <div className="border-t border-green-500/30 pt-2 mt-2">
-                          {dnsData.txt.map((record: any, index: number) => (
-                            <div key={index} className="font-mono text-sm text-gray-300 mb-1">
-                              <div className="flex justify-between">
-                                <div>
-                                  <span className="text-gray-400">{record.name}</span> {record.ttl} IN TXT
-                                </div>
-                                <button
-                                  onClick={() => copyToClipboard(record.value)}
-                                  className="text-gray-400 hover:text-green-500 transition-colors ml-2"
-                                  title="Copy value"
-                                >
-                                  <FaCopy size={14} />
-                                </button>
-                              </div>
-                              <div className="text-green-500 mt-1 break-all">{record.value}</div>
-                            </div>
-                          ))}
-                        </div>
+                    </div>
+                  )}
+                  
+                  {/* TXT Records */}
+                  {dnsData.txt && dnsData.txt.length > 0 && (
+                    <div className="bg-gray-800 p-4 rounded-md mb-6">
+                      <h3 className="text-lg text-green-500 mb-4 font-mono">TXT Records</h3>
+                      <div className="terminal-text mb-2">$ dig {domain} TXT</div>
+                      <div className="border-t border-green-500/30 pt-2 mt-2">
+                        {dnsData.txt.map((record, index) => (
+                          <div key={index} className="font-mono text-sm text-gray-300 mb-1 break-words">
+                            <span className="text-gray-400">{record.name}</span> {record.ttl || 3600} IN TXT <span className="text-green-500">&quot;{record.value}&quot;</span>
+                          </div>
+                        ))}
                       </div>
-                    )}
-
-                    {(!dnsData.a || dnsData.a.length === 0) && 
-                     (!dnsData.aaaa || dnsData.aaaa.length === 0) && 
-                     (!dnsData.mx || dnsData.mx.length === 0) && 
-                     (!dnsData.ns || dnsData.ns.length === 0) && 
-                     (!dnsData.txt || dnsData.txt.length === 0) && (
-                      <div className="bg-gray-800 p-6 rounded-md text-center border border-green-500/30">
-                        <FaExclamationTriangle className="text-yellow-400 mx-auto mb-4" size={24} />
-                        <p className="text-gray-400 font-mono">No DNS records found for this domain</p>
-                      </div>
-                    )}
-                  </div>
+                    </div>
+                  )}
+                  
+                  {/* No DNS Records */}
+                  {(!dnsData.a || dnsData.a.length === 0) && 
+                   (!dnsData.aaaa || dnsData.aaaa.length === 0) && 
+                   (!dnsData.mx || dnsData.mx.length === 0) && 
+                   (!dnsData.ns || dnsData.ns.length === 0) && 
+                   (!dnsData.txt || dnsData.txt.length === 0) && (
+                    <div className="bg-gray-800/50 border border-green-500/30 rounded-lg p-6 text-center">
+                      <FaExclamationTriangle className="text-yellow-400 mx-auto mb-4" size={32} />
+                      <h3 className="text-lg font-semibold text-green-400 mb-2">No DNS Records Found</h3>
+                      <p className="text-gray-400">
+                        We couldn&apos;t find any DNS records for {domain}.
+                      </p>
+                    </div>
+                  )}
                 </motion.div>
               </motion.div>
             )}
 
-            {activeTab === 'ssl' && (
+            {activeTab === 'ssl' && sslData && (
               <motion.div
                 variants={container}
                 initial="hidden"
@@ -768,282 +1169,236 @@ function ResultsPageContent() {
                   <div className="flex items-center justify-between mb-4">
                     <h2 className="text-xl font-bold text-green-400 flex items-center">
                       <FaShieldAlt className="mr-3 text-green-500" />
-                      SSL Certificate Information
+                      SSL Certificate
                     </h2>
-                    <div className="px-3 py-1 bg-gray-800 rounded-full text-sm text-green-500 font-mono">
-                      {domain}
+                    <div className="flex items-center">
+                      {sslData.valid ? (
+                        <div className="px-3 py-1 bg-green-900/30 text-green-400 rounded-full text-sm font-mono border border-green-500/30">
+                          <div className="flex items-center">
+                            <FaCheckCircle className="mr-2" />
+                            Valid
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="px-3 py-1 bg-red-900/30 text-red-400 rounded-full text-sm font-mono border border-red-500/30">
+                          <div className="flex items-center">
+                            <FaTimesCircle className="mr-2" />
+                            Invalid
+                          </div>
+                        </div>
+                      )}
+                      {/* Add retry button for main domain SSL check */}
+                      <button 
+                        onClick={() => handleRetrySSL(domain, -1)} 
+                        disabled={recheckingSSL[domain]}
+                        className="ml-3 px-3 py-1 bg-green-900/30 text-green-400 rounded text-sm font-mono border border-green-500/30 hover:bg-green-900/50 transition-colors inline-flex items-center"
+                        title="Retry SSL check"
+                      >
+                        <FaRedoAlt className={`mr-2 ${recheckingSSL[domain] ? 'animate-spin' : ''}`} />
+                        {recheckingSSL[domain] ? 'Checking...' : 'Retry Check'}
+                      </button>
                     </div>
                   </div>
                   
-                  {sslData ? (
-                    <>
-                      <div className="bg-gray-800 p-6 rounded-md mb-6 border border-green-500/30">
-                        <div className="flex items-center justify-between mb-4">
-                          <h3 className="text-lg text-green-500 font-mono">Certificate Status</h3>
-                          <div className={`px-3 py-1 rounded-full text-sm ${sslData.valid ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'} flex items-center`}>
-                            {sslData.valid ? (
-                              <>
-                                <FaCheckCircle className="mr-1" /> Valid
-                              </>
-                            ) : (
-                              <>
-                                <FaTimesCircle className="mr-1" /> Invalid
-                              </>
-                            )}
-                          </div>
-                        </div>
-                        
-                        {sslData.valid ? (
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                            <div>
-                              <ul className="space-y-3">
-                                <li className="flex justify-between items-center">
-                                  <span className="text-gray-400">Subject:</span>
-                                  <span className="text-green-500 font-mono">{sslData.subject || 'Unknown'}</span>
-                                </li>
-                                <li className="flex justify-between items-center">
-                                  <span className="text-gray-400">Issuer:</span>
-                                  <span className="text-green-500 font-mono truncate max-w-[180px]" title={sslData.issuer || 'Unknown'}>
-                                    {sslData.issuer || 'Unknown'}
-                                  </span>
-                                </li>
-                                <li className="flex justify-between items-center">
-                                  <span className="text-gray-400">Protocol:</span>
-                                  <span className="text-gray-300 font-mono">{sslData.protocol || 'Unknown'}</span>
-                                </li>
-                                <li className="flex justify-between items-center">
-                                  <span className="text-gray-400">Cipher:</span>
-                                  <span className="text-gray-300 font-mono">{sslData.cipher || 'Unknown'}</span>
-                                </li>
-                              </ul>
-                            </div>
-                            
-                            <div>
-                              <ul className="space-y-3">
-                                <li className="flex justify-between items-center">
-                                  <span className="text-gray-400">Valid From:</span>
-                                  <span className="text-green-500 font-mono">{sslData.validFrom ? formatDate(sslData.validFrom) : 'Unknown'}</span>
-                                </li>
-                                <li className="flex justify-between items-center">
-                                  <span className="text-gray-400">Valid To:</span>
-                                  <span className="text-green-500 font-mono">{sslData.validTo ? formatDate(sslData.validTo) : 'Unknown'}</span>
-                                </li>
-                                <li className="flex justify-between items-center">
-                                  <span className="text-gray-400">Days Remaining:</span>
-                                  <span className={`font-mono ${
-                                    sslData.daysRemaining !== undefined 
-                                      ? (sslData.daysRemaining > 30 
-                                        ? 'text-green-400' 
-                                        : sslData.daysRemaining > 14 
-                                          ? 'text-yellow-400' 
-                                          : 'text-red-400')
-                                      : 'text-gray-400'
-                                  }`}>
-                                    {sslData.daysRemaining != null ? `${sslData.daysRemaining} days` : 'Unknown'}
-                                  </span>
-                                </li>
-                                <li className="flex justify-between items-center">
-                                  <span className="text-gray-400">Serial:</span>
-                                  <span className="text-gray-300 font-mono truncate max-w-[180px]" title={sslData.serialNumber || 'Unknown'}>
-                                    {sslData.serialNumber || 'Unknown'}
-                                  </span>
-                                </li>
-                              </ul>
-                            </div>
-                          </div>
-                        ) : (
-                          <div className="p-4 bg-red-500/10 rounded-md border border-red-500/30">
-                            <div className="flex items-center text-red-400 mb-2">
-                              <FaExclamationTriangle className="mr-2" />
-                              <span className="font-medium">Certificate Error</span>
-                            </div>
-                            <p className="text-red-400 text-sm">
-                              {sslData.error || 'SSL certificate could not be verified'}
-                            </p>
-                          </div>
-                        )}
-                      </div>
-
-                      {sslData.valid && (
-                        <div className="p-4 bg-gray-800/50 rounded-md border border-green-500/30">
-                          <p className="text-gray-400 text-sm flex items-start">
-                            <FaShieldAlt className="text-green-500 mt-0.5 mr-2 flex-shrink-0" />
-                            <span>
-                              The SSL certificate for <span className="text-green-500 glow-text">{domain}</span> is 
-                              <span className="text-green-400 mx-1">valid</span>
-                              and will expire in 
-                              <span className={`font-semibold mx-1 ${
-                                sslData.daysRemaining !== undefined 
-                                  ? (sslData.daysRemaining > 30 
-                                    ? 'text-green-400' 
-                                    : sslData.daysRemaining > 14 
-                                      ? 'text-yellow-400' 
-                                      : 'text-red-400')
-                                  : 'text-gray-400'
-                              }`}>
-                                {sslData.daysRemaining != null ? `${sslData.daysRemaining} days` : 'Unknown'}
-                              </span>. 
-                              The connection is <span className="text-green-500">secure</span> using modern encryption protocols.
+                  {sslData.valid ? (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <div className="bg-gray-800 p-4 rounded-md border border-green-500/30 hover:border-green-500 transition-colors">
+                        <h3 className="text-lg mb-3 text-green-500 font-mono flex items-center">
+                          <FaShieldAlt className="mr-2 text-green-500/80" />
+                          Certificate Details
+                        </h3>
+                        <ul className="space-y-3">
+                          <li className="flex justify-between items-center">
+                            <span className="text-gray-400">Issuer:</span>
+                            <span className="text-gray-300 font-mono text-right">{sslData.issuer || 'Unknown'}</span>
+                          </li>
+                          <li className="flex justify-between items-center">
+                            <span className="text-gray-400">Subject:</span>
+                            <span className="text-gray-300 font-mono text-right">{sslData.subject || domain}</span>
+                          </li>
+                          <li className="flex items-center justify-between">
+                            <span className="text-gray-400 flex items-center">
+                              <FaCalendarAlt className="mr-2 text-green-500/80" /> Valid From:
                             </span>
-                          </p>
-                        </div>
-                      )}
-                    </>
+                            <span className="text-gray-300 font-mono">{formatDate(sslData.validFrom)}</span>
+                          </li>
+                          <li className="flex items-center justify-between">
+                            <span className="text-gray-400 flex items-center">
+                              <FaClock className="mr-2 text-green-500/80" /> Valid To:
+                            </span>
+                            <span className="text-gray-300 font-mono">{formatDate(sslData.validTo)}</span>
+                          </li>
+                          <li className="flex justify-between items-center">
+                            <span className="text-gray-400">Serial Number:</span>
+                            <span className="text-gray-300 font-mono text-right truncate max-w-[200px]" title={sslData.serialNumber || 'Unknown'}>
+                              {sslData.serialNumber || 'Unknown'}
+                            </span>
+                          </li>
+                        </ul>
+                      </div>
+                      
+                      <div className="bg-gray-800 p-4 rounded-md border border-green-500/30 hover:border-green-500 transition-colors">
+                        <h3 className="text-lg mb-3 text-green-500 font-mono flex items-center">
+                          <FaTerminal className="mr-2 text-green-500/80" />
+                          Connection Details
+                        </h3>
+                        <ul className="space-y-3">
+                          <li className="flex justify-between items-center">
+                            <span className="text-gray-400">Protocol:</span>
+                            <span className="text-green-500 font-mono">{sslData.protocol || 'Unknown'}</span>
+                          </li>
+                          <li className="flex justify-between items-center">
+                            <span className="text-gray-400">Cipher:</span>
+                            <span className="text-gray-300 font-mono">{sslData.cipher || 'Unknown'}</span>
+                          </li>
+                          <li className="flex justify-between items-center">
+                            <span className="text-gray-400">Fingerprint:</span>
+                            <span className="text-gray-300 font-mono text-right truncate max-w-[200px]" title={sslData.fingerprint || 'Unknown'}>
+                              {sslData.fingerprint || 'Unknown'}
+                            </span>
+                          </li>
+                          <li className="flex justify-between items-center">
+                            <span className="text-gray-400">Days Remaining:</span>
+                            <span className={`font-mono ${
+                              sslData.daysRemaining && sslData.daysRemaining > 30 
+                                ? 'text-green-500' 
+                                : sslData.daysRemaining && sslData.daysRemaining > 7 
+                                  ? 'text-yellow-500' 
+                                  : 'text-red-500'
+                            }`}>
+                              {sslData.daysRemaining !== undefined ? `${sslData.daysRemaining} days` : 'Unknown'}
+                            </span>
+                          </li>
+                        </ul>
+                      </div>
+                    </div>
                   ) : (
-                    <div className="bg-gray-800 p-6 rounded-md text-center border border-green-500/30">
-                      <FaExclamationTriangle className="text-yellow-400 mx-auto mb-4" size={24} />
-                      <p className="text-gray-400">No SSL certificate information available for this domain.</p>
-                    </div>
-                  )}
-                </motion.div>
-              </motion.div>
-            )}
-
-            {activeTab === 'email' && emailData && (
-              <motion.div
-                variants={container}
-                initial="hidden"
-                animate="show"
-                className="bg-gray-900 p-6 rounded-lg border border-green-500/30"
-              >
-                <motion.div variants={item}>
-                  <h2 className="text-xl font-bold mb-4 text-green-400">Email Information</h2>
-                  
-                  {/* Domain Email Addresses */}
-                  {emailData.domainEmails && emailData.domainEmails.length > 0 && (
-                    <div className="bg-gray-800 p-6 rounded-md mb-6">
-                      <h3 className="text-lg text-green-500 mb-4 font-mono">Domain Email Addresses</h3>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        {emailData.domainEmails.map((email: any, index: number) => (
-                          <div key={index} className={`bg-gray-800/30 p-3 rounded-md flex items-center border ${email.status === 'valid' ? 'border-green-500/40' : email.status === 'invalid' ? 'border-red-500/40' : 'border-yellow-500/40'}`}>
-                            <div className="mr-3 flex items-center">
-                              <FaEnvelope className={`mr-2 ${email.status === 'valid' ? 'text-green-400' : email.status === 'invalid' ? 'text-red-400' : 'text-yellow-400'}`} />
-                              {getEmailStatusIcon(email.status)}
-                            </div>
-                            <div className="flex-grow">
-                              <div className="text-green-500 font-mono">{email.address}</div>
-                              <div className="text-xs text-gray-400 mt-1">{getEmailStatusText(email.verification)}</div>
-                            </div>
-                            <button
-                              onClick={() => copyToClipboard(email.address)}
-                              className="ml-auto text-gray-400 hover:text-green-400 transition-colors"
-                              title="Copy email"
-                            >
-                              <FaCopy size={16} />
-                            </button>
-                          </div>
-                        ))}
+                    <div className="bg-gray-800/50 border border-red-500/30 rounded-lg p-6">
+                      <div className="text-center mb-6">
+                        <FaExclamationTriangle className="text-red-400 mx-auto mb-4" size={32} />
+                        <h3 className="text-lg font-semibold text-red-400 mb-2">SSL Certificate Error</h3>
+                        <p className="text-gray-400">
+                          {sslData.error || "This domain doesn't have a valid SSL certificate."}
+                        </p>
                       </div>
-                    </div>
-                  )}
-                  
-                  {/* Third-Party Email Addresses */}
-                  {emailData.thirdPartyEmails && emailData.thirdPartyEmails.length > 0 && (
-                    <div className="bg-gray-800 p-6 rounded-md mb-6">
-                      <h3 className="text-lg text-green-500 mb-4 font-mono">Third-Party Email Addresses</h3>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        {emailData.thirdPartyEmails.map((email: any, index: number) => (
-                          <div key={index} className={`bg-gray-800/30 p-3 rounded-md flex items-center ${email.status === 'valid' ? 'border border-green-500/40' : email.status === 'invalid' ? 'border border-red-500/40' : ''}`}>
-                            <div className="mr-3 flex items-center">
-                              <FaEnvelope className={`mr-2 ${email.status === 'valid' ? 'text-green-400' : email.status === 'invalid' ? 'text-red-400' : 'text-green-500'}`} />
-                              {getEmailStatusIcon(email.status)}
-                            </div>
-                            <div className="flex-grow">
-                              <div className="text-gray-300 font-mono">{email.address}</div>
-                              <div className="text-xs text-gray-400 mt-1">{getEmailStatusText(email.verification)}</div>
-                            </div>
-                            <button
-                              onClick={() => copyToClipboard(email.address)}
-                              className="ml-auto text-gray-400 hover:text-green-400 transition-colors"
-                              title="Copy email"
-                            >
-                              <FaCopy size={16} />
-                            </button>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                  
-                  {/* Valid Email Addresses */}
-                  {emailData.validEmails && emailData.validEmails.length > 0 && (
-                    <div className="bg-gray-800 p-6 rounded-md mb-6">
-                      <h3 className="text-lg text-green-400 mb-4 font-mono flex items-center">
-                        <FaCheckCircle className="mr-2" /> 
-                        Verified Email Addresses
-                      </h3>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        {emailData.validEmails.map((email: any, index: number) => (
-                          <div key={index} className="bg-gray-800/30 p-3 rounded-md flex items-center border border-green-500/40">
-                            <FaEnvelope className="text-green-400 mr-3" />
-                            <span className="text-green-500 font-mono">{email.address}</span>
-                            <button
-                              onClick={() => copyToClipboard(email.address)}
-                              className="ml-auto text-gray-400 hover:text-green-400 transition-colors"
-                              title="Copy email"
-                            >
-                              <FaCopy size={16} />
-                            </button>
-                          </div>
-                        ))}
-                      </div>
-                      <div className="mt-3 text-sm text-gray-400">
-                        These email addresses have been verified and are confirmed to exist.
-                      </div>
-                    </div>
-                  )}
-                  
-                  {/* Show a message if no emails found in both categories */}
-                  {(!emailData.domainEmails || emailData.domainEmails.length === 0) && 
-                   (!emailData.thirdPartyEmails || emailData.thirdPartyEmails.length === 0) && (
-                    <div className="bg-gray-800 p-6 rounded-md mb-6">
-                      <h3 className="text-lg text-green-500 mb-4 font-mono">Discovered Email Addresses</h3>
-                      <div className="bg-gray-800/30 p-4 rounded-md text-center">
-                        <FaExclamationTriangle className="text-yellow-400 mx-auto mb-2" size={24} />
-                        <p className="text-gray-400">No email addresses were discovered for this domain.</p>
-                      </div>
-                    </div>
-                  )}
-
-                  {emailData && emailData.mailServers && emailData.mailServers.length > 0 && (
-                    <div className="mt-6">
-                      <h3 className="text-lg text-green-500 mb-4 font-mono">Mail Servers</h3>
-                      <div className="bg-gray-800 p-4 rounded-md">
-                        <div className="terminal-text mb-2">$ dig {domain} MX</div>
-                        <div className="border-t border-green-500/30 pt-2 mt-2">
-                          {emailData.mailServers.map((server: { ttl?: number; priority: number; host: string }, index: number) => (
-                            <div key={index} className="font-mono text-sm text-gray-300 mb-1">
-                              <span className="text-gray-400">{domain}</span> {server.ttl || 3600} IN MX {server.priority} <span className="text-green-500">{server.host}</span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {emailData && emailData.spfRecord && (
-                    <div className="mt-6">
-                      <h3 className="text-lg text-green-500 mb-4 font-mono">SPF Record</h3>
-                      <div className="bg-gray-800 p-4 rounded-md">
-                        <div className="terminal-text mb-2">$ dig {domain} TXT</div>
-                        <div className="border-t border-green-500/30 pt-2 mt-2">
-                          <div className="font-mono text-sm text-gray-300 mb-1">
-                            <span className="text-gray-400">{domain}</span> IN TXT &quot;<span className="text-green-500">{emailData.spfRecord}</span>&quot;
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {emailData && emailData.dmarcRecord && (
-                    <div className="mt-6">
-                      <h3 className="text-lg text-green-500 mb-4 font-mono">DMARC Record</h3>
-                      <div className="bg-gray-800 p-4 rounded-md">
-                        <div className="terminal-text mb-2">$ dig _dmarc.{domain} TXT</div>
-                        <div className="border-t border-green-500/30 pt-2 mt-2">
-                          <div className="font-mono text-sm text-gray-300 mb-1">
-                            <span className="text-gray-400">_dmarc.{domain}</span> IN TXT &quot;<span className="text-green-500">{emailData.dmarcRecord}</span>&quot;
-                          </div>
+                      
+                      <div className="bg-gray-900/50 rounded-md p-4 border border-red-500/20 mt-4">
+                        <h4 className="text-red-400 font-semibold mb-3 flex items-center">
+                          <FaShieldAlt className="mr-2" /> SSL Troubleshooting
+                        </h4>
+                        
+                        <ul className="space-y-3 text-sm">
+                          {sslData.error?.includes('No SSL certificate found') && (
+                            <>
+                              <li className="flex items-start">
+                                <span className="inline-block w-2 h-2 rounded-full bg-red-500 mt-1.5 mr-2"></span>
+                                <span className="text-gray-300">
+                                  The domain appears to be accessible, but doesn't provide a valid SSL certificate.
+                                </span>
+                              </li>
+                              <li className="flex items-start">
+                                <span className="inline-block w-2 h-2 rounded-full bg-red-500 mt-1.5 mr-2"></span>
+                                <span className="text-gray-300">
+                                  This could mean the SSL certificate is not properly configured or is missing.
+                                </span>
+                              </li>
+                            </>
+                          )}
+                          
+                          {sslData.error?.includes('HTTP only') && (
+                            <>
+                              <li className="flex items-start">
+                                <span className="inline-block w-2 h-2 rounded-full bg-yellow-500 mt-1.5 mr-2"></span>
+                                <span className="text-gray-300">
+                                  This domain only supports HTTP (not HTTPS).
+                                </span>
+                              </li>
+                              <li className="flex items-start">
+                                <span className="inline-block w-2 h-2 rounded-full bg-yellow-500 mt-1.5 mr-2"></span>
+                                <span className="text-gray-300">
+                                  To use HTTPS, an SSL certificate needs to be installed on the server.
+                                </span>
+                              </li>
+                            </>
+                          )}
+                          
+                          {sslData.error?.includes('timeout') && (
+                            <>
+                              <li className="flex items-start">
+                                <span className="inline-block w-2 h-2 rounded-full bg-yellow-500 mt-1.5 mr-2"></span>
+                                <span className="text-gray-300">
+                                  The connection timed out while trying to check the SSL certificate.
+                                </span>
+                              </li>
+                              <li className="flex items-start">
+                                <span className="inline-block w-2 h-2 rounded-full bg-yellow-500 mt-1.5 mr-2"></span>
+                                <span className="text-gray-300">
+                                  This could be due to network issues or server configuration problems.
+                                </span>
+                              </li>
+                            </>
+                          )}
+                          
+                          {sslData.error?.includes('not available') && (
+                            <>
+                              <li className="flex items-start">
+                                <span className="inline-block w-2 h-2 rounded-full bg-red-500 mt-1.5 mr-2"></span>
+                                <span className="text-gray-300">
+                                  The domain could not be reached. Check if the domain name is correct.
+                                </span>
+                              </li>
+                            </>
+                          )}
+                          
+                          {sslData.redirectTo && (
+                            <li className="flex items-start">
+                              <span className="inline-block w-2 h-2 rounded-full bg-blue-500 mt-1.5 mr-2"></span>
+                              <span className="text-gray-300">
+                                The domain redirects to: <a href={sslData.redirectTo} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:underline">{sslData.redirectTo}</a>
+                              </span>
+                            </li>
+                          )}
+                          
+                          {/* Default recommendations if no specific error matched */}
+                          {!sslData.error?.includes('No SSL certificate found') && 
+                           !sslData.error?.includes('HTTP only') && 
+                           !sslData.error?.includes('timeout') && 
+                           !sslData.error?.includes('not available') && (
+                            <>
+                              <li className="flex items-start">
+                                <span className="inline-block w-2 h-2 rounded-full bg-yellow-500 mt-1.5 mr-2"></span>
+                                <span className="text-gray-300">
+                                  Check if HTTPS is properly configured for this domain.
+                                </span>
+                              </li>
+                              <li className="flex items-start">
+                                <span className="inline-block w-2 h-2 rounded-full bg-yellow-500 mt-1.5 mr-2"></span>
+                                <span className="text-gray-300">
+                                  SSL certificate might be invalid, expired, or not properly installed.
+                                </span>
+                              </li>
+                            </>
+                          )}
+                        </ul>
+                        
+                        <div className="mt-4 pt-4 border-t border-red-500/20 flex justify-center">
+                          <a 
+                            href={`http://${domain}`} 
+                            target="_blank" 
+                            rel="noopener noreferrer" 
+                            className="px-3 py-2 bg-gray-800 text-gray-300 rounded border border-gray-700 inline-flex items-center mr-4 hover:bg-gray-700 transition-colors"
+                          >
+                            <FaLink className="mr-2" /> Visit HTTP Version
+                          </a>
+                          
+                          <a 
+                            href={`https://${domain}`} 
+                            target="_blank" 
+                            rel="noopener noreferrer" 
+                            className="px-3 py-2 bg-green-900/30 text-green-400 rounded border border-green-500/30 inline-flex items-center hover:bg-green-900/50 transition-colors"
+                          >
+                            <FaLink className="mr-2" /> Try HTTPS Anyway
+                          </a>
                         </div>
                       </div>
                     </div>
@@ -1063,140 +1418,591 @@ function ResultsPageContent() {
                   <div className="flex items-center justify-between mb-4">
                     <h2 className="text-xl font-bold text-green-400 flex items-center">
                       <FaSitemap className="mr-3 text-green-500" />
-                      Discovered Subdomains
+                      Subdomains
                     </h2>
                     <div className="px-3 py-1 bg-gray-800 rounded-full text-sm text-green-500 font-mono">
-                      {domain}
+                      Found: {subdomains.length}
                     </div>
                   </div>
                   
                   {subdomains && subdomains.length > 0 ? (
-                    <div className="space-y-6">
-                      <div className="flex items-center justify-between mb-2">
-                        <div className="text-gray-400 text-sm flex items-center">
-                          <FaLink className="mr-2" />
-                          {subdomains.length} subdomain{subdomains.length !== 1 ? 's' : ''} discovered
-                        </div>
-                        <div className="text-xs text-gray-400">Click on a subdomain to view details</div>
-                      </div>
-                      
-                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                        {subdomains.map((subdomain: {
-                          name: string;
-                          ip: string;
-                          sslInfo?: {
-                            valid: boolean;
-                            issuer: string;
-                            validTo: string;
-                            protocol: string;
-                            error?: string;
-                          }
-                        }, index: number) => (
-                          <div key={index} className="bg-gray-800 p-4 rounded-md border border-green-500/30 hover:border-green-500 transition-colors">
-                            <div className="flex items-center justify-between mb-3">
-                              <h3 className="text-green-500 font-mono truncate max-w-[180px]" title={subdomain.name}>
-                                {subdomain.name}
-                              </h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {subdomains.map((subdomain, index) => (
+                        <div key={index} className="bg-gray-800 p-4 rounded-md border border-green-500/30 hover:border-green-500 transition-colors">
+                          <div className="flex items-center justify-between mb-3">
+                            <h3 className="text-green-500 font-mono truncate max-w-[200px]" title={subdomain.name}>
+                              {subdomain.name}
+                            </h3>
+                            <div className="flex items-center">
                               {subdomain.sslInfo && (
-                                <div className={`px-2 py-1 rounded-full text-xs flex items-center ${subdomain.sslInfo.valid ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}`}>
-                                  {subdomain.sslInfo.valid ? (
-                                    <>
-                                      <FaCheckCircle className="mr-1" size={10} /> SSL Valid
-                                    </>
-                                  ) : (
-                                    <>
-                                      <FaTimesCircle className="mr-1" size={10} /> SSL Invalid
-                                    </>
-                                  )}
+                                <div className={`px-2 py-0.5 rounded text-xs ${
+                                  subdomain.sslInfo.valid ? 'bg-green-900/30 text-green-400' : 'bg-red-900/30 text-red-400'
+                                } mr-2`}>
+                                  {subdomain.sslInfo.valid ? 'SSL' : 'No SSL'}
                                 </div>
                               )}
-                            </div>
-                            
-                            <div className="text-sm text-gray-400 mb-3 flex items-center">
-                              <span className="font-bold text-gray-300 mr-2">IP:</span> 
-                              <span className="font-mono">{subdomain.ip || 'Unknown'}</span>
+                              {!subdomain.sslInfo && subdomain.available !== false && (
+                                <div className="px-2 py-0.5 rounded text-xs bg-yellow-900/30 text-yellow-400 mr-2">
+                                  SSL Unknown
+                                </div>
+                              )}
                               <button
-                                onClick={() => copyToClipboard(subdomain.ip || '')}
-                                className="ml-2 text-gray-400 hover:text-green-400 transition-colors"
-                                title="Copy IP"
-                                disabled={!subdomain.ip}
+                                onClick={() => copyToClipboard(subdomain.name)}
+                                className="text-gray-400 hover:text-green-500 transition-colors"
+                                title="Copy subdomain"
                               >
-                                <FaCopy size={12} />
+                                <FaCopy size={14} />
                               </button>
                             </div>
+                          </div>
+                          
+                          <div className="text-sm">
+                            {subdomain.available === false && (
+                              <div className="flex justify-between py-1 border-b border-green-500/10">
+                                <span className="text-gray-400">Status:</span>
+                                <span className="text-red-400 font-mono">Not Available</span>
+                              </div>
+                            )}
+                            
+                            {subdomain.available && subdomain.httpOnly && (
+                              <div className="flex justify-between py-1 border-b border-green-500/10">
+                                <span className="text-gray-400">Connection:</span>
+                                <span className="text-yellow-400 font-mono">HTTP Only</span>
+                              </div>
+                            )}
+                            
+                            {subdomain.ip && (
+                              <div className="flex justify-between py-1 border-b border-green-500/10">
+                                <span className="text-gray-400">IP Address:</span>
+                                <span className="text-gray-300 font-mono">{subdomain.ip}</span>
+                              </div>
+                            )}
                             
                             {subdomain.sslInfo && subdomain.sslInfo.valid && (
-                              <div className="mt-3 border-t border-green-500/30 pt-3 text-sm">
-                                <div className="flex justify-between mb-1">
+                              <>
+                                <div className="flex justify-between py-1 border-b border-green-500/10">
                                   <span className="text-gray-400">Issuer:</span>
-                                  <span className="text-gray-300 truncate max-w-[150px]" title={subdomain.sslInfo.issuer}>
-                                    {subdomain.sslInfo.issuer}
+                                  <span className="text-gray-300 font-mono truncate max-w-[180px]" title={subdomain.sslInfo.issuer || 'Unknown'}>
+                                    {subdomain.sslInfo.issuer || 'Unknown'}
                                   </span>
                                 </div>
-                                <div className="flex justify-between mb-1">
+                                <div className="flex justify-between py-1 border-b border-green-500/10">
                                   <span className="text-gray-400">Expires:</span>
-                                  <span className="text-gray-300">{formatDate(subdomain.sslInfo.validTo)}</span>
+                                  <span className="text-gray-300 font-mono">{formatDate(subdomain.sslInfo.validTo)}</span>
                                 </div>
-                                <div className="flex justify-between">
+                                <div className="flex justify-between py-1 border-b border-green-500/10">
                                   <span className="text-gray-400">Protocol:</span>
-                                  <span className="text-gray-300">{subdomain.sslInfo.protocol}</span>
+                                  <span className="text-gray-300 font-mono">{subdomain.sslInfo.protocol || 'Unknown'}</span>
                                 </div>
-                              </div>
+                                {subdomain.sslInfo.daysRemaining !== undefined && (
+                                  <div className="flex justify-between py-1 border-b border-green-500/10">
+                                    <span className="text-gray-400">Days Remaining:</span>
+                                    <span className={`font-mono ${
+                                      subdomain.sslInfo.daysRemaining > 30 
+                                        ? 'text-green-500' 
+                                        : subdomain.sslInfo.daysRemaining > 7 
+                                          ? 'text-yellow-500' 
+                                          : 'text-red-500'
+                                    }`}>
+                                      {subdomain.sslInfo.daysRemaining} days
+                                    </span>
+                                  </div>
+                                )}
+                              </>
                             )}
                             
                             {subdomain.sslInfo && !subdomain.sslInfo.valid && (
-                              <div className="mt-3 border-t border-green-500/30 pt-3 text-sm text-red-400">
-                                <div className="flex items-start">
-                                  <FaExclamationTriangle className="text-red-400 mr-2 mt-0.5 flex-shrink-0" size={12} />
-                                  <span>{subdomain.sslInfo.error || 'Invalid SSL certificate'}</span>
+                              <div className="py-1 border-b border-green-500/10">
+                                <div className="flex justify-between">
+                                  <span className="text-gray-400">SSL Status:</span>
+                                  <span className="text-red-400">Invalid</span>
+                                </div>
+                                {subdomain.sslInfo.error && (
+                                  <div className="mt-1 text-red-400/80 text-xs border-t border-green-500/10 pt-1 break-words">
+                                    {subdomain.sslInfo.error}
+                                  </div>
+                                )}
+                                <div className="mt-2 flex justify-end">
+                                  <button 
+                                    onClick={() => handleRetrySSL(subdomain.name, index)} 
+                                    disabled={recheckingSSL[subdomain.name]}
+                                    className="text-green-500 hover:text-green-400 transition-colors inline-flex items-center text-xs px-2 py-1 border border-green-500/30 rounded"
+                                    title="Retry SSL check"
+                                  >
+                                    <FaRedoAlt className={`mr-1 ${recheckingSSL[subdomain.name] ? 'animate-spin' : ''}`} size={10} />
+                                    <span>{recheckingSSL[subdomain.name] ? 'Checking...' : 'Retry SSL Check'}</span>
+                                  </button>
                                 </div>
                               </div>
                             )}
                             
-                            {!subdomain.sslInfo && (
-                              <div className="mt-3 border-t border-green-500/30 pt-3 text-sm text-gray-400">
-                                <div className="flex items-center">
-                                  <FaShieldAlt className="mr-2" size={12} />
-                                  No SSL certificate found
+                            {/* Add retry button for subdomains without SSL info */}
+                            {(!subdomain.sslInfo && subdomain.available !== false) && (
+                              <div className="py-1 border-b border-green-500/10">
+                                <div className="flex justify-between">
+                                  <span className="text-gray-400">SSL Status:</span>
+                                  <span className="text-yellow-400">Unknown</span>
+                                </div>
+                                <div className="mt-2 flex justify-end">
+                                  <button 
+                                    onClick={() => handleRetrySSL(subdomain.name, index)} 
+                                    disabled={recheckingSSL[subdomain.name]}
+                                    className="text-green-500 hover:text-green-400 transition-colors inline-flex items-center text-xs px-2 py-1 border border-green-500/30 rounded"
+                                    title="Check SSL"
+                                  >
+                                    <FaShieldAlt className={`mr-1 ${recheckingSSL[subdomain.name] ? 'animate-spin' : ''}`} size={10} />
+                                    <span>{recheckingSSL[subdomain.name] ? 'Checking...' : 'Check SSL'}</span>
+                                  </button>
                                 </div>
                               </div>
                             )}
                             
-                            <div className="mt-3 text-right">
+                            <div className="mt-2 flex gap-2">
                               <a 
                                 href={`https://${subdomain.name}`} 
                                 target="_blank" 
-                                rel="noopener noreferrer"
-                                className="inline-flex items-center text-xs text-green-400 hover:underline"
+                                rel="noopener noreferrer" 
+                                className="text-green-500 hover:text-green-400 flex items-center text-xs"
                               >
-                                Visit <FaLink className="ml-1" size={10} />
+                                <FaLink className="mr-1" /> Visit HTTPS
+                              </a>
+                              <a 
+                                href={`http://${subdomain.name}`} 
+                                target="_blank" 
+                                rel="noopener noreferrer" 
+                                className="text-gray-400 hover:text-green-400 flex items-center text-xs"
+                              >
+                                <FaLink className="mr-1" /> Visit HTTP
                               </a>
                             </div>
                           </div>
-                        ))}
-                      </div>
+                        </div>
+                      ))}
                     </div>
                   ) : (
-                    <div className="bg-gray-800 p-6 rounded-md text-center border border-green-500/30">
-                      <FaExclamationTriangle className="text-yellow-400 mx-auto mb-4" size={24} />
-                      <p className="text-gray-400">No subdomains were discovered for this domain.</p>
+                    <div className="bg-gray-800/50 border border-green-500/30 rounded-lg p-6 text-center">
+                      <FaExclamationTriangle className="text-yellow-400 mx-auto mb-4" size={32} />
+                      <h3 className="text-lg font-semibold text-green-400 mb-2">No Subdomains Found</h3>
+                      <p className="text-gray-400">
+                        We couldn&apos;t find any subdomains for {domain}.
+                      </p>
                     </div>
                   )}
                 </motion.div>
               </motion.div>
             )}
 
-            {activeTab === 'email' && !emailData && !loading && (
-              <motion.div 
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="bg-gray-800/50 border border-green-500/30 rounded-lg p-6 text-center"
+            {activeTab === 'certhistory' && (
+              <motion.div
+                variants={container}
+                initial="hidden"
+                animate="show"
+                className="bg-gray-900 p-6 rounded-lg border border-green-500/30"
               >
-                <FaExclamationTriangle className="text-yellow-400 mx-auto mb-4" size={32} />
-                <h3 className="text-lg font-semibold text-green-400 mb-2">No Email Data Available</h3>
-                <p className="text-gray-400">
-                  We couldn&apos;t find any email-related information for {domain}.
-                </p>
+                <motion.div variants={item}>
+                  <div className="flex items-center justify-between mb-4">
+                    <h2 className="text-xl font-bold text-green-400 flex items-center">
+                      <FaHistory className="mr-3 text-green-500" />
+                      Certificate Transparency Logs
+                    </h2>
+                    <div className="px-3 py-1 bg-gray-800 rounded-full text-sm text-green-500 font-mono">
+                      Found: {certHistoryData.length}
+                    </div>
+                  </div>
+                  
+                  {certHistoryData && certHistoryData.length > 0 ? (
+                    <div className="space-y-4">
+                      <div className="bg-gray-800 p-4 rounded-md mb-4">
+                        <h3 className="text-lg text-green-500 mb-3 font-mono">About Certificate Transparency</h3>
+                        <p className="text-gray-400 text-sm mb-2">
+                          Certificate Transparency (CT) is an open framework for monitoring and auditing SSL/TLS certificates. 
+                          By examining CT logs, you can discover certificates issued for your domain, which helps identify 
+                          unauthorized certificates and potential security issues.
+                        </p>
+                        <p className="text-gray-400 text-sm">
+                          The logs below show certificates that have been issued for <span className="text-green-400">{domain}</span> over time.
+                        </p>
+                      </div>
+                      
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                          <thead>
+                            <tr className="bg-gray-800 border-b border-green-500/20">
+                              <th className="text-left px-4 py-3 text-green-400">Issuer</th>
+                              <th className="text-left px-4 py-3 text-green-400">Domain</th>
+                              <th className="text-left px-4 py-3 text-green-400">Issued</th>
+                              <th className="text-left px-4 py-3 text-green-400">Expires</th>
+                              <th className="text-left px-4 py-3 text-green-400">Serial Number</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {certHistoryData.map((cert, index) => (
+                              <tr 
+                                key={cert.id} 
+                                className={`${index % 2 === 0 ? 'bg-gray-800/30' : 'bg-gray-800/50'} hover:bg-gray-800 transition-colors`}
+                              >
+                                <td className="px-4 py-3 text-gray-300">
+                                  {cert.issuer_name.split('CN=').pop()?.split(',')[0] || cert.issuer_name}
+                                </td>
+                                <td className="px-4 py-3">
+                                  <span className="text-green-400 font-mono">{cert.common_name}</span>
+                                </td>
+                                <td className="px-4 py-3 text-gray-300">
+                                  {formatDate(cert.not_before)}
+                                </td>
+                                <td className="px-4 py-3 text-gray-300">
+                                  {formatDate(cert.not_after)}
+                                </td>
+                                <td className="px-4 py-3">
+                                  <span className="text-xs text-gray-400 font-mono truncate block max-w-[150px]" title={cert.serial_number}>
+                                    {cert.serial_number}
+                                  </span>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                      
+                      <div className="bg-gray-800/50 p-4 rounded-md mt-4 border border-green-500/20">
+                        <h4 className="text-green-400 font-semibold mb-2 flex items-center">
+                          <FaShieldAlt className="mr-2" /> Security Implications
+                        </h4>
+                        <ul className="space-y-2 text-sm text-gray-400">
+                          <li className="flex items-start">
+                            <span className="inline-block w-2 h-2 rounded-full bg-green-500 mt-1.5 mr-2"></span>
+                            <span>Unexpected certificates could indicate unauthorized issuance or potential phishing attempts</span>
+                          </li>
+                          <li className="flex items-start">
+                            <span className="inline-block w-2 h-2 rounded-full bg-green-500 mt-1.5 mr-2"></span>
+                            <span>Multiple issuers may be normal for organizations using different certificate authorities</span>
+                          </li>
+                          <li className="flex items-start">
+                            <span className="inline-block w-2 h-2 rounded-full bg-green-500 mt-1.5 mr-2"></span>
+                            <span>Certificates for unexpected subdomains could reveal hidden infrastructure</span>
+                          </li>
+                        </ul>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="bg-gray-800/50 border border-green-500/30 rounded-lg p-6 text-center">
+                      <FaExclamationTriangle className="text-yellow-400 mx-auto mb-4" size={32} />
+                      <h3 className="text-lg font-semibold text-green-400 mb-2">No Certificate History Found</h3>
+                      <p className="text-gray-400">
+                        We couldn&apos;t find any certificate transparency logs for {domain}.
+                      </p>
+                      <p className="text-sm text-gray-500 mt-2">
+                        This may indicate that no SSL certificates have been issued for this domain, or that they were issued before CT logging became widespread.
+                      </p>
+                    </div>
+                  )}
+                </motion.div>
+              </motion.div>
+            )}
+
+            {activeTab === 'geoperformance' && (
+              <motion.div
+                variants={container}
+                initial="hidden"
+                animate="show"
+                className="bg-gray-900 p-6 rounded-lg border border-green-500/30"
+              >
+                <motion.div variants={item}>
+                  <div className="flex items-center justify-between mb-4">
+                    <h2 className="text-xl font-bold text-green-400 flex items-center">
+                      <FaRocket className="mr-3 text-green-500" />
+                      Global Performance Analysis
+                    </h2>
+                    {geoPerformanceData && (
+                      <div className="px-3 py-1 bg-gray-800 rounded-full text-sm text-green-400 font-mono">
+                        Success Rate: {geoPerformanceData.analysis.successRate.toFixed(1)}%
+                      </div>
+                    )}
+                  </div>
+                  
+                  {geoPerformanceData ? (
+                    <div className="space-y-4">
+                      <div className="bg-gray-800 p-4 rounded-md mb-4">
+                        <h3 className="text-lg text-green-500 mb-3 font-mono">Global Performance Summary</h3>
+                        
+                        {geoPerformanceData.metadata && (
+                          <div className="text-xs text-gray-400 mb-3">
+                            Test completed in {(geoPerformanceData.metadata.testDuration / 1000).toFixed(1)}s 
+                            at {new Date(geoPerformanceData.metadata.testEndTime).toLocaleString()}
+                            {geoPerformanceData.metadata.testerRegion !== 'unknown' && 
+                              ` from ${geoPerformanceData.metadata.testerRegion}`}
+                          </div>
+                        )}
+                        
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
+                          <div className="bg-gray-900/70 p-3 rounded border border-green-500/30">
+                            <h4 className="text-green-400 text-sm mb-2">Best Region</h4>
+                            <div className="flex items-center">
+                              <span className="text-lg font-semibold text-gray-200">{geoPerformanceData.analysis.bestRegion}</span>
+                              <span className="ml-2 text-sm text-green-400">{geoPerformanceData.analysis.bestLatency} ms</span>
+                            </div>
+                          </div>
+                          
+                          <div className="bg-gray-900/70 p-3 rounded border border-green-500/30">
+                            <h4 className="text-yellow-400 text-sm mb-2">Worst Region</h4>
+                            <div className="flex items-center">
+                              <span className="text-lg font-semibold text-gray-200">{geoPerformanceData.analysis.worstRegion}</span>
+                              <span className="ml-2 text-sm text-yellow-400">{geoPerformanceData.analysis.worstLatency} ms</span>
+                            </div>
+                          </div>
+                          
+                          <div className="bg-gray-900/70 p-3 rounded border border-green-500/30">
+                            <h4 className="text-green-400 text-sm mb-2">Overall Rating</h4>
+                            <div className="flex items-center">
+                              <span className={`text-lg font-semibold ${
+                                geoPerformanceData.analysis.overallRating === 'excellent' ? 'text-green-400' :
+                                geoPerformanceData.analysis.overallRating === 'good' ? 'text-green-300' :
+                                geoPerformanceData.analysis.overallRating === 'average' ? 'text-yellow-400' :
+                                geoPerformanceData.analysis.overallRating === 'poor' ? 'text-orange-400' : 'text-red-400'
+                              }`}>
+                                {geoPerformanceData.analysis.overallRating.charAt(0).toUpperCase() + 
+                                 geoPerformanceData.analysis.overallRating.slice(1)}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                        
+                        {/* IP addresses detected */}
+                        {geoPerformanceData.analysis.ipAddresses && geoPerformanceData.analysis.ipAddresses.length > 0 && (
+                          <div className="mt-4 pt-3 border-t border-green-500/20">
+                            <h4 className="text-green-400 text-sm mb-2">IP Addresses Detected</h4>
+                            <div className="flex flex-wrap gap-2">
+                              {geoPerformanceData.analysis.ipAddresses.map((ip, idx) => (
+                                <span key={idx} className="px-2 py-1 bg-gray-900/50 rounded text-xs text-gray-300 font-mono">
+                                  {ip}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                      
+                      <div className="bg-gray-800 p-4 rounded-md">
+                        <h3 className="text-lg text-green-500 mb-3 font-mono">Location Results</h3>
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-sm">
+                            <thead>
+                              <tr className="bg-gray-800 border-b border-green-500/20">
+                                <th className="text-left px-4 py-3 text-green-400">Location</th>
+                                <th className="text-center px-4 py-3 text-green-400">Status</th>
+                                <th className="text-right px-4 py-3 text-green-400">Latency</th>
+                                <th className="text-left px-4 py-3 text-green-400">Protocol</th>
+                                <th className="text-left px-4 py-3 text-green-400">Details</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {geoPerformanceData.results.map((result, index) => (
+                                <tr 
+                                  key={index} 
+                                  className={`${index % 2 === 0 ? 'bg-gray-800/30' : 'bg-gray-800/50'} hover:bg-gray-800 transition-colors`}
+                                >
+                                  <td className="px-4 py-3">
+                                    <div className="flex items-center">
+                                      <span className="mr-2">{result.location.emoji}</span>
+                                      <span className="text-gray-300">{result.location.name}</span>
+                                    </div>
+                                  </td>
+                                  <td className="px-4 py-3 text-center">
+                                    {result.success ? (
+                                      <span className="inline-flex items-center px-2 py-1 rounded-full text-xs bg-green-900/30 text-green-400">
+                                        <FaCheckCircle className="mr-1" size={10} /> Success
+                                      </span>
+                                    ) : (
+                                      <span className="inline-flex items-center px-2 py-1 rounded-full text-xs bg-red-900/30 text-red-400">
+                                        <FaTimesCircle className="mr-1" size={10} /> Failed
+                                      </span>
+                                    )}
+                                  </td>
+                                  <td className="px-4 py-3 text-right text-gray-300">
+                                    {result.latency} ms
+                                  </td>
+                                  <td className="px-4 py-3 text-gray-300 text-sm">
+                                    {result.protocol ? (
+                                      <span className={`px-2 py-1 rounded-full text-xs ${
+                                        result.protocol === 'https' ? 'bg-green-900/30 text-green-400' : 'bg-yellow-900/30 text-yellow-400'
+                                      }`}>
+                                        {result.protocol.toUpperCase()}
+                                      </span>
+                                    ) : (
+                                      <span className="text-gray-500">-</span>
+                                    )}
+                                  </td>
+                                  <td className="px-4 py-3 text-gray-300 text-sm">
+                                    {result.success ? (
+                                      <span className="text-xs text-gray-400">
+                                        DNS: {result.dnsLookupTime}ms | 
+                                        Conn: {result.connectionTime}ms
+                                        {result.sslVerificationTime ? ` | SSL: ${result.sslVerificationTime}ms` : ''}
+                                        {result.ipAddress && (
+                                          <span className="ml-1 text-gray-500">({result.ipAddress})</span>
+                                        )}
+                                      </span>
+                                    ) : (
+                                      <span className="text-xs text-red-400/80">
+                                        {result.error}
+                                        {result.errorDetails && (
+                                          <span className="block mt-1 text-gray-500 text-xs">{result.errorDetails.split('\n')[0]}</span>
+                                        )}
+                                      </span>
+                                    )}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                      
+                      {/* Region Performance */}
+                      <div className="bg-gray-800 p-4 rounded-md">
+                        <h3 className="text-lg text-green-500 mb-3 font-mono">Performance by Region</h3>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                          {Object.entries(geoPerformanceData.analysis.regionPerformance).map(([region, data]) => (
+                            <div key={region} className={`bg-gray-900/70 p-3 rounded border ${
+                              data.successRate < 30 ? 'border-red-500/30' : 'border-green-500/30'
+                            }`}>
+                              <h4 className={`text-sm mb-2 ${
+                                data.successRate < 30 ? 'text-red-400' : 'text-green-400'
+                              }`}>
+                                {region}
+                                {data.dominantErrorType === 'REGIONAL_RESTRICTION' && (
+                                  <span className="ml-2 px-1.5 py-0.5 bg-red-900/30 text-red-400 rounded-full text-xs">
+                                    Restricted
+                                  </span>
+                                )}
+                              </h4>
+                              <div className="space-y-2 text-xs text-gray-300">
+                                <div className="flex justify-between">
+                                  <span>Success Rate:</span>
+                                  <span className={`${
+                                    data.successRate > 90 ? 'text-green-400' :
+                                    data.successRate > 70 ? 'text-yellow-400' : 'text-red-400'
+                                  }`}>
+                                    {data.successRate.toFixed(1)}%
+                                  </span>
+                                </div>
+                                <div className="flex justify-between">
+                                  <span>Average Latency:</span>
+                                  <span>
+                                    {data.averageLatency === Infinity ? 
+                                      <span className="text-red-400">Failed</span> : 
+                                      `${data.averageLatency.toFixed(0)} ms`
+                                    }
+                                  </span>
+                                </div>
+                                {data.dominantProtocol && (
+                                  <div className="flex justify-between">
+                                    <span>Protocol:</span>
+                                    <span className={`${
+                                      data.dominantProtocol === 'https' ? 'text-green-400' : 'text-yellow-400'
+                                    }`}>
+                                      {data.dominantProtocol.toUpperCase()}
+                                    </span>
+                                  </div>
+                                )}
+                                {data.dominantErrorType && (
+                                  <div className="flex justify-between">
+                                    <span>Common Error:</span>
+                                    <span className="text-red-400">
+                                      {data.dominantErrorType.replace(/_/g, ' ')}
+                                    </span>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                      
+                      {/* Restricted Regions Alert */}
+                      {geoPerformanceData.analysis.restrictedRegions && geoPerformanceData.analysis.restrictedRegions.length > 0 && (
+                        <div className="bg-red-900/20 p-4 rounded-md mt-4 border border-red-500/30">
+                          <h4 className="text-red-400 font-semibold mb-2 flex items-center">
+                            <FaExclamationTriangle className="mr-2" /> Regional Restrictions Detected
+                          </h4>
+                          <p className="text-sm text-gray-300 mb-3">
+                            The domain <span className="text-white font-semibold">{domain}</span> appears to be restricted or blocked in the following regions:
+                          </p>
+                          <ul className="space-y-2 text-sm">
+                            {geoPerformanceData.analysis.restrictedRegions.map((region, index) => (
+                              <li key={index} className="bg-gray-800/50 p-2 rounded flex items-start">
+                                <FaExclamationTriangle className="text-red-500 mt-0.5 mr-2 flex-shrink-0" />
+                                <div>
+                                  <span className="text-red-400 font-medium">{region.region}</span>
+                                  <span className="text-gray-400 ml-2">
+                                    ({region.successRate.toFixed(1)}% success rate)
+                                  </span>
+                                  <div className="text-xs text-gray-500 mt-1">
+                                    This region commonly blocks certain websites due to local regulations.
+                                  </div>
+                                </div>
+                              </li>
+                            ))}
+                          </ul>
+                          <p className="text-xs text-gray-400 mt-3">
+                            Regional restrictions can be due to government regulations, network policies, or content filtering systems.
+                            Users in these regions may need to use VPNs or proxy services to access this domain.
+                          </p>
+                        </div>
+                      )}
+                      
+                      {geoPerformanceData.analysis.failedLocations.length > 0 && (
+                        <div className="bg-gray-800/50 p-4 rounded-md mt-4 border border-red-500/20">
+                          <h4 className="text-red-400 font-semibold mb-2 flex items-center">
+                            <FaExclamationTriangle className="mr-2" /> Failed Locations
+                          </h4>
+                          <ul className="space-y-2 text-sm text-gray-400">
+                            {geoPerformanceData.analysis.failedLocations.map((location, index) => (
+                              <li key={index} className="flex items-start">
+                                <span className="inline-block w-2 h-2 rounded-full bg-red-500 mt-1.5 mr-2"></span>
+                                <div>
+                                  <span className="text-gray-300">{location.name}</span>: {location.error}
+                                  {location.errorDetails && (
+                                    <span className="block mt-1 text-gray-500 text-xs">{location.errorDetails}</span>
+                                  )}
+                                </div>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                      
+                      <div className="bg-gray-800/50 p-4 rounded-md mt-4 border border-green-500/20">
+                        <h4 className="text-green-400 font-semibold mb-2 flex items-center">
+                          <FaQuestionCircle className="mr-2" /> About Global Performance Testing
+                        </h4>
+                        <p className="text-sm text-gray-400 mb-2">
+                          This test performs real DNS lookups and connection attempts to {domain} from our server, 
+                          with regional network conditions simulated based on typical connection patterns from various global locations.
+                        </p>
+                        <p className="text-sm text-gray-400 mb-2">
+                          The test measures three key metrics: DNS lookup time, connection establishment time, and SSL verification time (for HTTPS).
+                          These provide insight into how your domain might perform for visitors from different parts of the world.
+                        </p>
+                        <p className="text-sm text-gray-400">
+                          Our testing also simulates regional connectivity issues and content restrictions that may affect access to certain domains
+                          in specific regions. Results marked as "Restricted" indicate that the domain may be inaccessible in those regions.
+                        </p>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="bg-gray-800/50 border border-green-500/30 rounded-lg p-6 text-center">
+                      <div className="w-16 h-16 border-4 border-green-500/30 border-t-green-500 rounded-full animate-spin mx-auto mb-4"></div>
+                      <h3 className="text-lg font-semibold text-green-400 mb-2">Running Global Performance Tests</h3>
+                      <p className="text-gray-400">
+                        We're testing how {domain} performs from different regions around the world.
+                      </p>
+                      <p className="text-sm text-gray-500 mt-2">
+                        This may take a moment as we check connectivity from multiple locations.
+                      </p>
+                    </div>
+                  )}
+                </motion.div>
               </motion.div>
             )}
           </>
