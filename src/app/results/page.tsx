@@ -48,6 +48,16 @@ interface DnsData {
   mx?: DnsRecord[];
   ns?: DnsRecord[];
   txt?: DnsRecord[];
+  srv?: DnsRecord[];
+  ptr?: DnsRecord[];
+  naptr?: DnsRecord[];
+  soa?: DnsRecord[];
+  caa?: DnsRecord[];
+  dnskey?: DnsRecord[];
+  tlsa?: DnsRecord[];
+  sshfp?: DnsRecord[];
+  uri?: DnsRecord[];
+  svcb?: DnsRecord[];
 }
 
 interface SslInfo {
@@ -961,12 +971,27 @@ function ResultsPageContent() {
                     <div className="bg-gray-800 p-4 rounded-md mb-6">
                       <h3 className="text-lg text-green-500 mb-4 font-mono">A Records (IPv4)</h3>
                       <div className="terminal-text mb-2">$ dig {domain} A</div>
-                      <div className="border-t border-green-500/30 pt-2 mt-2">
-                        {dnsData.a.map((record, index) => (
-                          <div key={index} className="font-mono text-sm text-gray-300 mb-1">
-                            <span className="text-gray-400">{record.name}</span> {record.ttl || 3600} IN A <span className="text-green-500">{record.value}</span>
-                          </div>
-                        ))}
+                      <div className="overflow-x-auto">
+                        <table className="w-full">
+                          <thead className="text-left border-b border-green-500/30">
+                            <tr>
+                              <th className="pb-2 text-green-400">Name</th>
+                              <th className="pb-2 text-green-400">TTL</th>
+                              <th className="pb-2 text-green-400">Type</th>
+                              <th className="pb-2 text-green-400">Value</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {dnsData.a.map((record, index) => (
+                              <tr key={index} className="font-mono text-sm text-gray-300">
+                                <td className="py-2 text-gray-400">{record.name}</td>
+                                <td className="py-2">{record.ttl || 3600}</td>
+                                <td className="py-2">A</td>
+                                <td className="py-2 text-green-500">{record.value}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
                       </div>
                     </div>
                   )}
@@ -976,12 +1001,27 @@ function ResultsPageContent() {
                     <div className="bg-gray-800 p-4 rounded-md mb-6">
                       <h3 className="text-lg text-green-500 mb-4 font-mono">AAAA Records (IPv6)</h3>
                       <div className="terminal-text mb-2">$ dig {domain} AAAA</div>
-                      <div className="border-t border-green-500/30 pt-2 mt-2">
-                        {dnsData.aaaa.map((record, index) => (
-                          <div key={index} className="font-mono text-sm text-gray-300 mb-1">
-                            <span className="text-gray-400">{record.name}</span> {record.ttl || 3600} IN AAAA <span className="text-green-500">{record.value}</span>
-                          </div>
-                        ))}
+                      <div className="overflow-x-auto">
+                        <table className="w-full">
+                          <thead className="text-left border-b border-green-500/30">
+                            <tr>
+                              <th className="pb-2 text-green-400">Name</th>
+                              <th className="pb-2 text-green-400">TTL</th>
+                              <th className="pb-2 text-green-400">Type</th>
+                              <th className="pb-2 text-green-400">Value</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {dnsData.aaaa.map((record, index) => (
+                              <tr key={index} className="font-mono text-sm text-gray-300">
+                                <td className="py-2 text-gray-400">{record.name}</td>
+                                <td className="py-2">{record.ttl || 3600}</td>
+                                <td className="py-2">AAAA</td>
+                                <td className="py-2 text-green-500">{record.value}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
                       </div>
                     </div>
                   )}
@@ -991,12 +1031,29 @@ function ResultsPageContent() {
                     <div className="bg-gray-800 p-4 rounded-md mb-6">
                       <h3 className="text-lg text-green-500 mb-4 font-mono">MX Records</h3>
                       <div className="terminal-text mb-2">$ dig {domain} MX</div>
-                      <div className="border-t border-green-500/30 pt-2 mt-2">
-                        {dnsData.mx.map((record, index) => (
-                          <div key={index} className="font-mono text-sm text-gray-300 mb-1">
-                            <span className="text-gray-400">{record.name}</span> {record.ttl || 3600} IN MX {record.priority} <span className="text-green-500">{record.value}</span>
-                          </div>
-                        ))}
+                      <div className="overflow-x-auto">
+                        <table className="w-full">
+                          <thead className="text-left border-b border-green-500/30">
+                            <tr>
+                              <th className="pb-2 text-green-400">Name</th>
+                              <th className="pb-2 text-green-400">TTL</th>
+                              <th className="pb-2 text-green-400">Type</th>
+                              <th className="pb-2 text-green-400">Priority</th>
+                              <th className="pb-2 text-green-400">Value</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {dnsData.mx.map((record, index) => (
+                              <tr key={index} className="font-mono text-sm text-gray-300">
+                                <td className="py-2 text-gray-400">{record.name}</td>
+                                <td className="py-2">{record.ttl || 3600}</td>
+                                <td className="py-2">MX</td>
+                                <td className="py-2">{record.priority}</td>
+                                <td className="py-2 text-green-500">{record.value}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
                       </div>
                     </div>
                   )}
@@ -1006,12 +1063,27 @@ function ResultsPageContent() {
                     <div className="bg-gray-800 p-4 rounded-md mb-6">
                       <h3 className="text-lg text-green-500 mb-4 font-mono">NS Records</h3>
                       <div className="terminal-text mb-2">$ dig {domain} NS</div>
-                      <div className="border-t border-green-500/30 pt-2 mt-2">
-                        {dnsData.ns.map((record, index) => (
-                          <div key={index} className="font-mono text-sm text-gray-300 mb-1">
-                            <span className="text-gray-400">{record.name}</span> {record.ttl || 3600} IN NS <span className="text-green-500">{record.value}</span>
-                          </div>
-                        ))}
+                      <div className="overflow-x-auto">
+                        <table className="w-full">
+                          <thead className="text-left border-b border-green-500/30">
+                            <tr>
+                              <th className="pb-2 text-green-400">Name</th>
+                              <th className="pb-2 text-green-400">TTL</th>
+                              <th className="pb-2 text-green-400">Type</th>
+                              <th className="pb-2 text-green-400">Value</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {dnsData.ns.map((record, index) => (
+                              <tr key={index} className="font-mono text-sm text-gray-300">
+                                <td className="py-2 text-gray-400">{record.name}</td>
+                                <td className="py-2">{record.ttl || 3600}</td>
+                                <td className="py-2">NS</td>
+                                <td className="py-2 text-green-500">{record.value}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
                       </div>
                     </div>
                   )}
@@ -1021,12 +1093,337 @@ function ResultsPageContent() {
                     <div className="bg-gray-800 p-4 rounded-md mb-6">
                       <h3 className="text-lg text-green-500 mb-4 font-mono">TXT Records</h3>
                       <div className="terminal-text mb-2">$ dig {domain} TXT</div>
-                      <div className="border-t border-green-500/30 pt-2 mt-2">
-                        {dnsData.txt.map((record, index) => (
-                          <div key={index} className="font-mono text-sm text-gray-300 mb-1 break-words">
-                            <span className="text-gray-400">{record.name}</span> {record.ttl || 3600} IN TXT <span className="text-green-500">&quot;{record.value}&quot;</span>
-                          </div>
-                        ))}
+                      <div className="overflow-x-auto">
+                        <table className="w-full">
+                          <thead className="text-left border-b border-green-500/30">
+                            <tr>
+                              <th className="pb-2 text-green-400">Name</th>
+                              <th className="pb-2 text-green-400">TTL</th>
+                              <th className="pb-2 text-green-400">Type</th>
+                              <th className="pb-2 text-green-400">Value</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {dnsData.txt.map((record, index) => (
+                              <tr key={index} className="font-mono text-sm text-gray-300">
+                                <td className="py-2 text-gray-400">{record.name}</td>
+                                <td className="py-2">{record.ttl || 3600}</td>
+                                <td className="py-2">TXT</td>
+                                <td className="py-2 text-green-500 break-words">&quot;{record.value}&quot;</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* SRV Records */}
+                  {dnsData.srv && dnsData.srv.length > 0 && (
+                    <div className="bg-gray-800 p-4 rounded-md mb-6">
+                      <h3 className="text-lg text-green-500 mb-4 font-mono">SRV Records</h3>
+                      <div className="terminal-text mb-2">$ dig {domain} SRV</div>
+                      <div className="overflow-x-auto">
+                        <table className="w-full">
+                          <thead className="text-left border-b border-green-500/30">
+                            <tr>
+                              <th className="pb-2 text-green-400">Name</th>
+                              <th className="pb-2 text-green-400">TTL</th>
+                              <th className="pb-2 text-green-400">Type</th>
+                              <th className="pb-2 text-green-400">Priority</th>
+                              <th className="pb-2 text-green-400">Weight</th>
+                              <th className="pb-2 text-green-400">Port</th>
+                              <th className="pb-2 text-green-400">Target</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {dnsData.srv.map((record, index) => (
+                              <tr key={index} className="font-mono text-sm text-gray-300">
+                                <td className="py-2 text-gray-400">{record.name}</td>
+                                <td className="py-2">{record.ttl || 3600}</td>
+                                <td className="py-2">SRV</td>
+                                <td className="py-2">{(record as any).priority || '-'}</td>
+                                <td className="py-2">{(record as any).weight || '-'}</td>
+                                <td className="py-2">{(record as any).port || '-'}</td>
+                                <td className="py-2 text-green-500">{record.value}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* PTR Records */}
+                  {dnsData.ptr && dnsData.ptr.length > 0 && (
+                    <div className="bg-gray-800 p-4 rounded-md mb-6">
+                      <h3 className="text-lg text-green-500 mb-4 font-mono">PTR Records</h3>
+                      <div className="terminal-text mb-2">$ dig {domain} PTR</div>
+                      <div className="overflow-x-auto">
+                        <table className="w-full">
+                          <thead className="text-left border-b border-green-500/30">
+                            <tr>
+                              <th className="pb-2 text-green-400">Name</th>
+                              <th className="pb-2 text-green-400">TTL</th>
+                              <th className="pb-2 text-green-400">Type</th>
+                              <th className="pb-2 text-green-400">Value</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {dnsData.ptr.map((record, index) => (
+                              <tr key={index} className="font-mono text-sm text-gray-300">
+                                <td className="py-2 text-gray-400">{record.name}</td>
+                                <td className="py-2">{record.ttl || 3600}</td>
+                                <td className="py-2">PTR</td>
+                                <td className="py-2 text-green-500">{record.value}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* NAPTR Records */}
+                  {dnsData.naptr && dnsData.naptr.length > 0 && (
+                    <div className="bg-gray-800 p-4 rounded-md mb-6">
+                      <h3 className="text-lg text-green-500 mb-4 font-mono">NAPTR Records</h3>
+                      <div className="terminal-text mb-2">$ dig {domain} NAPTR</div>
+                      <div className="overflow-x-auto">
+                        <table className="w-full">
+                          <thead className="text-left border-b border-green-500/30">
+                            <tr>
+                              <th className="pb-2 text-green-400">Name</th>
+                              <th className="pb-2 text-green-400">TTL</th>
+                              <th className="pb-2 text-green-400">Type</th>
+                              <th className="pb-2 text-green-400">Value</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {dnsData.naptr.map((record, index) => (
+                              <tr key={index} className="font-mono text-sm text-gray-300">
+                                <td className="py-2 text-gray-400">{record.name}</td>
+                                <td className="py-2">{record.ttl || 3600}</td>
+                                <td className="py-2">NAPTR</td>
+                                <td className="py-2 text-green-500">{record.value}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* SOA Records */}
+                  {dnsData.soa && dnsData.soa.length > 0 && (
+                    <div className="bg-gray-800 p-4 rounded-md mb-6">
+                      <h3 className="text-lg text-green-500 mb-4 font-mono">SOA Records</h3>
+                      <div className="terminal-text mb-2">$ dig {domain} SOA</div>
+                      <div className="overflow-x-auto">
+                        <table className="w-full">
+                          <thead className="text-left border-b border-green-500/30">
+                            <tr>
+                              <th className="pb-2 text-green-400">Name</th>
+                              <th className="pb-2 text-green-400">TTL</th>
+                              <th className="pb-2 text-green-400">Type</th>
+                              <th className="pb-2 text-green-400">Value</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {dnsData.soa.map((record, index) => (
+                              <tr key={index} className="font-mono text-sm text-gray-300">
+                                <td className="py-2 text-gray-400">{record.name}</td>
+                                <td className="py-2">{record.ttl || 3600}</td>
+                                <td className="py-2">SOA</td>
+                                <td className="py-2 text-green-500 break-words">{record.value}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* CAA Records */}
+                  {dnsData.caa && dnsData.caa.length > 0 && (
+                    <div className="bg-gray-800 p-4 rounded-md mb-6">
+                      <h3 className="text-lg text-green-500 mb-4 font-mono">CAA Records</h3>
+                      <div className="terminal-text mb-2">$ dig {domain} CAA</div>
+                      <div className="overflow-x-auto">
+                        <table className="w-full">
+                          <thead className="text-left border-b border-green-500/30">
+                            <tr>
+                              <th className="pb-2 text-green-400">Name</th>
+                              <th className="pb-2 text-green-400">TTL</th>
+                              <th className="pb-2 text-green-400">Type</th>
+                              <th className="pb-2 text-green-400">Flags</th>
+                              <th className="pb-2 text-green-400">Tag</th>
+                              <th className="pb-2 text-green-400">Value</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {dnsData.caa.map((record, index) => (
+                              <tr key={index} className="font-mono text-sm text-gray-300">
+                                <td className="py-2 text-gray-400">{record.name}</td>
+                                <td className="py-2">{record.ttl || 3600}</td>
+                                <td className="py-2">CAA</td>
+                                <td className="py-2">{(record as any).flags || '-'}</td>
+                                <td className="py-2">{(record as any).tag || '-'}</td>
+                                <td className="py-2 text-green-500">{record.value}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* DNSKEY Records */}
+                  {dnsData.dnskey && dnsData.dnskey.length > 0 && (
+                    <div className="bg-gray-800 p-4 rounded-md mb-6">
+                      <h3 className="text-lg text-green-500 mb-4 font-mono">DNSKEY Records</h3>
+                      <div className="terminal-text mb-2">$ dig {domain} DNSKEY</div>
+                      <div className="overflow-x-auto">
+                        <table className="w-full">
+                          <thead className="text-left border-b border-green-500/30">
+                            <tr>
+                              <th className="pb-2 text-green-400">Name</th>
+                              <th className="pb-2 text-green-400">TTL</th>
+                              <th className="pb-2 text-green-400">Type</th>
+                              <th className="pb-2 text-green-400">Value</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {dnsData.dnskey.map((record, index) => (
+                              <tr key={index} className="font-mono text-sm text-gray-300">
+                                <td className="py-2 text-gray-400">{record.name}</td>
+                                <td className="py-2">{record.ttl || 3600}</td>
+                                <td className="py-2">DNSKEY</td>
+                                <td className="py-2 text-green-500 break-words">{record.value}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* TLSA Records */}
+                  {dnsData.tlsa && dnsData.tlsa.length > 0 && (
+                    <div className="bg-gray-800 p-4 rounded-md mb-6">
+                      <h3 className="text-lg text-green-500 mb-4 font-mono">TLSA Records</h3>
+                      <div className="terminal-text mb-2">$ dig {domain} TLSA</div>
+                      <div className="overflow-x-auto">
+                        <table className="w-full">
+                          <thead className="text-left border-b border-green-500/30">
+                            <tr>
+                              <th className="pb-2 text-green-400">Name</th>
+                              <th className="pb-2 text-green-400">TTL</th>
+                              <th className="pb-2 text-green-400">Type</th>
+                              <th className="pb-2 text-green-400">Value</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {dnsData.tlsa.map((record, index) => (
+                              <tr key={index} className="font-mono text-sm text-gray-300">
+                                <td className="py-2 text-gray-400">{record.name}</td>
+                                <td className="py-2">{record.ttl || 3600}</td>
+                                <td className="py-2">TLSA</td>
+                                <td className="py-2 text-green-500 break-words">{record.value}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* SSHFP Records */}
+                  {dnsData.sshfp && dnsData.sshfp.length > 0 && (
+                    <div className="bg-gray-800 p-4 rounded-md mb-6">
+                      <h3 className="text-lg text-green-500 mb-4 font-mono">SSHFP Records</h3>
+                      <div className="terminal-text mb-2">$ dig {domain} SSHFP</div>
+                      <div className="overflow-x-auto">
+                        <table className="w-full">
+                          <thead className="text-left border-b border-green-500/30">
+                            <tr>
+                              <th className="pb-2 text-green-400">Name</th>
+                              <th className="pb-2 text-green-400">TTL</th>
+                              <th className="pb-2 text-green-400">Type</th>
+                              <th className="pb-2 text-green-400">Value</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {dnsData.sshfp.map((record, index) => (
+                              <tr key={index} className="font-mono text-sm text-gray-300">
+                                <td className="py-2 text-gray-400">{record.name}</td>
+                                <td className="py-2">{record.ttl || 3600}</td>
+                                <td className="py-2">SSHFP</td>
+                                <td className="py-2 text-green-500 break-words">{record.value}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* URI Records */}
+                  {dnsData.uri && dnsData.uri.length > 0 && (
+                    <div className="bg-gray-800 p-4 rounded-md mb-6">
+                      <h3 className="text-lg text-green-500 mb-4 font-mono">URI Records</h3>
+                      <div className="terminal-text mb-2">$ dig {domain} URI</div>
+                      <div className="overflow-x-auto">
+                        <table className="w-full">
+                          <thead className="text-left border-b border-green-500/30">
+                            <tr>
+                              <th className="pb-2 text-green-400">Name</th>
+                              <th className="pb-2 text-green-400">TTL</th>
+                              <th className="pb-2 text-green-400">Type</th>
+                              <th className="pb-2 text-green-400">Value</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {dnsData.uri.map((record, index) => (
+                              <tr key={index} className="font-mono text-sm text-gray-300">
+                                <td className="py-2 text-gray-400">{record.name}</td>
+                                <td className="py-2">{record.ttl || 3600}</td>
+                                <td className="py-2">URI</td>
+                                <td className="py-2 text-green-500 break-words">{record.value}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* SVCB Records */}
+                  {dnsData.svcb && dnsData.svcb.length > 0 && (
+                    <div className="bg-gray-800 p-4 rounded-md mb-6">
+                      <h3 className="text-lg text-green-500 mb-4 font-mono">SVCB Records</h3>
+                      <div className="terminal-text mb-2">$ dig {domain} SVCB</div>
+                      <div className="overflow-x-auto">
+                        <table className="w-full">
+                          <thead className="text-left border-b border-green-500/30">
+                            <tr>
+                              <th className="pb-2 text-green-400">Name</th>
+                              <th className="pb-2 text-green-400">TTL</th>
+                              <th className="pb-2 text-green-400">Type</th>
+                              <th className="pb-2 text-green-400">Value</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {dnsData.svcb.map((record, index) => (
+                              <tr key={index} className="font-mono text-sm text-gray-300">
+                                <td className="py-2 text-gray-400">{record.name}</td>
+                                <td className="py-2">{record.ttl || 3600}</td>
+                                <td className="py-2">SVCB</td>
+                                <td className="py-2 text-green-500 break-words">{record.value}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
                       </div>
                     </div>
                   )}
@@ -1036,7 +1433,17 @@ function ResultsPageContent() {
                    (!dnsData.aaaa || dnsData.aaaa.length === 0) && 
                    (!dnsData.mx || dnsData.mx.length === 0) && 
                    (!dnsData.ns || dnsData.ns.length === 0) && 
-                   (!dnsData.txt || dnsData.txt.length === 0) && (
+                   (!dnsData.txt || dnsData.txt.length === 0) &&
+                   (!dnsData.srv || dnsData.srv.length === 0) &&
+                   (!dnsData.ptr || dnsData.ptr.length === 0) &&
+                   (!dnsData.naptr || dnsData.naptr.length === 0) &&
+                   (!dnsData.soa || dnsData.soa.length === 0) &&
+                   (!dnsData.caa || dnsData.caa.length === 0) &&
+                   (!dnsData.dnskey || dnsData.dnskey.length === 0) &&
+                   (!dnsData.tlsa || dnsData.tlsa.length === 0) &&
+                   (!dnsData.sshfp || dnsData.sshfp.length === 0) &&
+                   (!dnsData.uri || dnsData.uri.length === 0) &&
+                   (!dnsData.svcb || dnsData.svcb.length === 0) && (
                     <div className="bg-gray-800/50 border border-green-500/30 rounded-lg p-6 text-center">
                       <FaExclamationTriangle className="text-yellow-400 mx-auto mb-4" size={32} />
                       <h3 className="text-lg font-semibold text-green-400 mb-2">No DNS Records Found</h3>
