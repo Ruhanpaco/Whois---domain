@@ -87,79 +87,6 @@ interface CertificateInfo {
   serial_number: string;
 }
 
-// After adding the other interfaces, add this new interface for geo performance data
-interface GeoPerformanceData {
-  domain: string;
-  metadata: {
-    testStartTime: string;
-    testEndTime: string;
-    testDuration: number;
-    testerIp: string;
-    testerRegion: string;
-    quickMode: boolean;
-  };
-  analysis: {
-    successRate: number;
-    overallRating: string;
-    bestRegion: string;
-    bestLatency: number | null;
-    worstRegion: string;
-    worstLatency: number | null;
-    ipAddresses: string[];
-    regionPerformance: {
-      [key: string]: {
-        totalLatency: number;
-        count: number;
-        successCount: number;
-        averageLatency: number;
-        successRate: number;
-        protocols: {
-          [key: string]: number;
-        };
-        ipAddresses: string[];
-        dominantProtocol: string;
-        errorTypes?: {
-          [key: string]: number;
-        };
-        dominantErrorType?: string;
-      }
-    };
-    failedLocations: Array<{
-      name: string;
-      region: string;
-      error: string;
-      errorType: string;
-      errorDetails?: string;
-    }>;
-    restrictedRegions?: Array<{
-      region: string;
-      successRate: number;
-      errorTypes: {
-        [key: string]: number;
-      };
-    }>;
-  };
-  results: Array<{
-    success: boolean;
-    location: {
-      id: string;
-      name: string;
-      region: string;
-      emoji: string;
-    };
-    latency: number;
-    dnsLookupTime?: number;
-    connectionTime?: number;
-    sslVerificationTime?: number;
-    performanceRating?: string;
-    error?: string;
-    errorType?: string;
-    errorDetails?: string;
-    ipAddress?: string;
-    protocol?: string;
-  }>;
-}
-
 // Loading component
 function ResultsPageLoader() {
   return (
@@ -181,20 +108,18 @@ function ResultsPageContent() {
   const [loading, setLoading] = useState(true);
   const [loadingStatus, setLoadingStatus] = useState<string>('Initializing...');
   const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'whois' | 'dns' | 'ssl' | 'email' | 'subdomains' | 'certhistory' | 'geoperformance'>('whois');
+  const [activeTab, setActiveTab] = useState<'whois' | 'dns' | 'ssl' | 'email' | 'subdomains' | 'certhistory'>('whois');
   const [whoisData, setWhoisData] = useState<WhoisData | null>(null);
   const [dnsData, setDnsData] = useState<DnsData | null>(null);
   const [sslData, setSslData] = useState<SslInfo | null>(null);
   const [subdomains, setSubdomains] = useState<Subdomain[]>([]);
   const [certHistoryData, setCertHistoryData] = useState<CertificateInfo[]>([]);
-  const [geoPerformanceData, setGeoPerformanceData] = useState<GeoPerformanceData | null>(null);
   const [apiErrors, setApiErrors] = useState<{[key: string]: boolean}>({
     whois: false,
     dns: false,
     ssl: false,
     subdomains: false,
-    certHistory: false,
-    geoPerformance: false
+    certHistory: false
   });
   // Add state to track which subdomains are being rechecked
   const [recheckingSSL, setRecheckingSSL] = useState<{[key: string]: boolean}>({});
@@ -205,7 +130,7 @@ function ResultsPageContent() {
     completed: number;
     current: string;
   }>({
-    total: 6, // WHOIS, DNS, SSL, Subdomains, CertHistory, GeoPerformance
+    total: 5, // WHOIS, DNS, SSL, Subdomains, CertHistory
     completed: 0,
     current: 'Preparing to fetch data...'
   });
@@ -220,7 +145,7 @@ function ResultsPageContent() {
       setError(null);
       setLoadingStatus('Initializing checks...');
       setLoadingProgress({
-        total: 6, // WHOIS, DNS, SSL, Subdomains, CertHistory, GeoPerformance
+        total: 5, // WHOIS, DNS, SSL, Subdomains, CertHistory
         completed: 0,
         current: 'Starting domain analysis'
       });
@@ -237,8 +162,7 @@ function ResultsPageContent() {
         dns: false,
         ssl: false,
         subdomains: false,
-        certHistory: false,
-        geoPerformance: false
+        certHistory: false
       });
       
       try {
@@ -274,17 +198,8 @@ function ResultsPageContent() {
             clearInterval(sslTimer);
           });
         
-        setLoadingStatus('Checking certificate history...');
-        setLoadingProgress(prev => ({...prev, current: 'Analyzing certificate transparency logs', completed: 4}));
-        const certHistoryPromise = fetch(`/api/V1/GET/certhistory?domain=${encodeURIComponent(domain)}`);
-        
-        // Add geo performance check
-        setLoadingStatus('Analyzing global performance...');
-        setLoadingProgress(prev => ({...prev, current: 'Testing domain from global locations', completed: 5}));
-        const geoPerformancePromise = fetch(`/api/V1/GET/geoperformance?domain=${encodeURIComponent(domain)}`);
-        
         // Execute all fetches in parallel
-        const [whoisResponse, dnsResponse, subdomainsResponse, sslResponse, certHistoryResponse, geoPerformanceResponse] = 
+        const [whoisResponse, dnsResponse, subdomainsResponse, sslResponse] = 
           await Promise.all([
             whoisPromise.catch(err => {
               console.error('Error fetching WHOIS data:', err);
@@ -305,16 +220,6 @@ function ResultsPageContent() {
               console.error('Error fetching SSL data:', err);
               setApiErrors(prev => ({...prev, ssl: true}));
               return new Response(JSON.stringify({ error: 'Failed to fetch SSL data' }));
-            }),
-            certHistoryPromise.catch(err => {
-              console.error('Error fetching certificate history data:', err);
-              setApiErrors(prev => ({...prev, certHistory: true}));
-              return new Response(JSON.stringify({ error: 'Failed to fetch certificate history data' }));
-            }),
-            geoPerformancePromise.catch(err => {
-              console.error('Error fetching geo performance data:', err);
-              setApiErrors(prev => ({...prev, geoPerformance: true}));
-              return new Response(JSON.stringify({ error: 'Failed to fetch geo performance data' }));
             })
           ]);
         
@@ -347,18 +252,24 @@ function ResultsPageContent() {
         setLoadingStatus('Processing SSL data...');
         const sslDataResult = await processResponse(sslResponse, 'ssl');
         
+        setLoadingStatus('Checking certificate history...');
+        setLoadingProgress(prev => ({...prev, current: 'Analyzing certificate transparency logs', completed: 4}));
+        const certHistoryPromise = fetch(`/api/V1/GET/certhistory?domain=${encodeURIComponent(domain)}`);
+        
+        const certHistoryResponse = await certHistoryPromise.catch(err => {
+          console.error('Error fetching certificate history data:', err);
+          setApiErrors(prev => ({...prev, certHistory: true}));
+          return new Response(JSON.stringify({ error: 'Failed to fetch certificate history data' }));
+        });
+        
         setLoadingStatus('Processing certificate history...');
         const certHistoryDataResult = await processResponse(certHistoryResponse, 'certHistory');
-        
-        setLoadingStatus('Processing geo performance data...');
-        const geoPerformanceDataResult = await processResponse(geoPerformanceResponse, 'geoPerformance');
         
         console.log('WHOIS Data:', whoisDataResult);
         console.log('DNS Data:', dnsDataResult);
         console.log('SSL Data:', sslDataResult);
         console.log('Subdomains Data:', subdomainsDataResult);
         console.log('Certificate History Data:', certHistoryDataResult);
-        console.log('Geo Performance Data:', geoPerformanceDataResult);
         
         // Set data safely with null fallbacks
         setWhoisData(whoisDataResult?.whoisData || null);
@@ -377,10 +288,10 @@ function ResultsPageContent() {
           }
         }
         
+        // Set certificate history data
         setCertHistoryData(certHistoryDataResult?.certificates || []);
-        setGeoPerformanceData(geoPerformanceDataResult || null);
         
-        setLoadingProgress(prev => ({...prev, completed: 6, current: 'Complete'}));
+        setLoadingProgress(prev => ({...prev, completed: 5, current: 'Complete'}));
         setLoadingStatus(`Domain analysis complete in ${Math.floor((Date.now() - startTime) / 1000)}s`);
         
         // If all APIs failed, show a general error
@@ -675,14 +586,6 @@ function ResultsPageContent() {
                   </span>
                   Certificate Transparency Analysis
                 </li>
-                <li className={`flex items-center ${loadingProgress.completed >= 6 ? 'text-green-400' : 'text-gray-500'}`}>
-                  <span className={`w-4 h-4 mr-2 rounded-full flex items-center justify-center ${
-                    loadingProgress.completed >= 6 ? 'bg-green-900/50 text-green-500' : 'bg-gray-800'
-                  }`}>
-                    {loadingProgress.completed >= 6 ? '✓' : '6'}
-                  </span>
-                  Geo Performance Analysis
-                </li>
               </ul>
               <p className="mt-4 text-xs text-gray-500 italic">
                 SSL certificate checks may take longer due to connection timeouts
@@ -763,18 +666,6 @@ function ResultsPageContent() {
                 >
                   <FaHistory className="mr-2" />
                   Cert History {apiErrors.certHistory && <FaExclamationTriangle className="ml-1 text-yellow-500" title="Data fetch failed" />}
-                </button>
-                <button
-                  onClick={() => setActiveTab('geoperformance')}
-                  className={`px-4 py-3 rounded-md flex items-center ${
-                    activeTab === 'geoperformance'
-                      ? 'bg-green-500/20 text-green-400 border border-green-500/30'
-                      : 'text-gray-400 hover:text-green-400 hover:bg-black/30'
-                  } ${apiErrors.geoPerformance ? 'opacity-50' : ''}`}
-                  disabled={apiErrors.geoPerformance}
-                >
-                  <FaRocket className="mr-2" />
-                  Geo Performance {apiErrors.geoPerformance && <FaExclamationTriangle className="ml-1 text-yellow-500" title="Data fetch failed" />}
                 </button>
               </div>
             </div>
@@ -1693,312 +1584,6 @@ function ResultsPageContent() {
                       </p>
                       <p className="text-sm text-gray-500 mt-2">
                         This may indicate that no SSL certificates have been issued for this domain, or that they were issued before CT logging became widespread.
-                      </p>
-                    </div>
-                  )}
-                </motion.div>
-              </motion.div>
-            )}
-
-            {activeTab === 'geoperformance' && (
-              <motion.div
-                variants={container}
-                initial="hidden"
-                animate="show"
-                className="bg-gray-900 p-6 rounded-lg border border-green-500/30"
-              >
-                <motion.div variants={item}>
-                  <div className="flex items-center justify-between mb-4">
-                    <h2 className="text-xl font-bold text-green-400 flex items-center">
-                      <FaRocket className="mr-3 text-green-500" />
-                      Global Performance Analysis
-                    </h2>
-                    {geoPerformanceData && (
-                      <div className="px-3 py-1 bg-gray-800 rounded-full text-sm text-green-400 font-mono">
-                        Success Rate: {geoPerformanceData.analysis.successRate.toFixed(1)}%
-                      </div>
-                    )}
-                  </div>
-                  
-                  {geoPerformanceData ? (
-                    <div className="space-y-4">
-                      <div className="bg-gray-800 p-4 rounded-md mb-4">
-                        <h3 className="text-lg text-green-500 mb-3 font-mono">Global Performance Summary</h3>
-                        
-                        {geoPerformanceData.metadata && (
-                          <div className="text-xs text-gray-400 mb-3">
-                            Test completed in {(geoPerformanceData.metadata.testDuration / 1000).toFixed(1)}s 
-                            at {new Date(geoPerformanceData.metadata.testEndTime).toLocaleString()}
-                            {geoPerformanceData.metadata.testerRegion !== 'unknown' && 
-                              ` from ${geoPerformanceData.metadata.testerRegion}`}
-                          </div>
-                        )}
-                        
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
-                          <div className="bg-gray-900/70 p-3 rounded border border-green-500/30">
-                            <h4 className="text-green-400 text-sm mb-2">Best Region</h4>
-                            <div className="flex items-center">
-                              <span className="text-lg font-semibold text-gray-200">{geoPerformanceData.analysis.bestRegion}</span>
-                              <span className="ml-2 text-sm text-green-400">{geoPerformanceData.analysis.bestLatency} ms</span>
-                            </div>
-                          </div>
-                          
-                          <div className="bg-gray-900/70 p-3 rounded border border-green-500/30">
-                            <h4 className="text-yellow-400 text-sm mb-2">Worst Region</h4>
-                            <div className="flex items-center">
-                              <span className="text-lg font-semibold text-gray-200">{geoPerformanceData.analysis.worstRegion}</span>
-                              <span className="ml-2 text-sm text-yellow-400">{geoPerformanceData.analysis.worstLatency} ms</span>
-                            </div>
-                          </div>
-                          
-                          <div className="bg-gray-900/70 p-3 rounded border border-green-500/30">
-                            <h4 className="text-green-400 text-sm mb-2">Overall Rating</h4>
-                            <div className="flex items-center">
-                              <span className={`text-lg font-semibold ${
-                                geoPerformanceData.analysis.overallRating === 'excellent' ? 'text-green-400' :
-                                geoPerformanceData.analysis.overallRating === 'good' ? 'text-green-300' :
-                                geoPerformanceData.analysis.overallRating === 'average' ? 'text-yellow-400' :
-                                geoPerformanceData.analysis.overallRating === 'poor' ? 'text-orange-400' : 'text-red-400'
-                              }`}>
-                                {geoPerformanceData.analysis.overallRating.charAt(0).toUpperCase() + 
-                                 geoPerformanceData.analysis.overallRating.slice(1)}
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                        
-                        {/* IP addresses detected */}
-                        {geoPerformanceData.analysis.ipAddresses && geoPerformanceData.analysis.ipAddresses.length > 0 && (
-                          <div className="mt-4 pt-3 border-t border-green-500/20">
-                            <h4 className="text-green-400 text-sm mb-2">IP Addresses Detected</h4>
-                            <div className="flex flex-wrap gap-2">
-                              {geoPerformanceData.analysis.ipAddresses.map((ip, idx) => (
-                                <span key={idx} className="px-2 py-1 bg-gray-900/50 rounded text-xs text-gray-300 font-mono">
-                                  {ip}
-                                </span>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                      
-                      <div className="bg-gray-800 p-4 rounded-md">
-                        <h3 className="text-lg text-green-500 mb-3 font-mono">Location Results</h3>
-                        <div className="overflow-x-auto">
-                          <table className="w-full text-sm">
-                            <thead>
-                              <tr className="bg-gray-800 border-b border-green-500/20">
-                                <th className="text-left px-4 py-3 text-green-400">Location</th>
-                                <th className="text-center px-4 py-3 text-green-400">Status</th>
-                                <th className="text-right px-4 py-3 text-green-400">Latency</th>
-                                <th className="text-left px-4 py-3 text-green-400">Protocol</th>
-                                <th className="text-left px-4 py-3 text-green-400">Details</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {geoPerformanceData.results.map((result, index) => (
-                                <tr 
-                                  key={index} 
-                                  className={`${index % 2 === 0 ? 'bg-gray-800/30' : 'bg-gray-800/50'} hover:bg-gray-800 transition-colors`}
-                                >
-                                  <td className="px-4 py-3">
-                                    <div className="flex items-center">
-                                      <span className="mr-2">{result.location.emoji}</span>
-                                      <span className="text-gray-300">{result.location.name}</span>
-                                    </div>
-                                  </td>
-                                  <td className="px-4 py-3 text-center">
-                                    {result.success ? (
-                                      <span className="inline-flex items-center px-2 py-1 rounded-full text-xs bg-green-900/30 text-green-400">
-                                        <FaCheckCircle className="mr-1" size={10} /> Success
-                                      </span>
-                                    ) : (
-                                      <span className="inline-flex items-center px-2 py-1 rounded-full text-xs bg-red-900/30 text-red-400">
-                                        <FaTimesCircle className="mr-1" size={10} /> Failed
-                                      </span>
-                                    )}
-                                  </td>
-                                  <td className="px-4 py-3 text-right text-gray-300">
-                                    {result.latency} ms
-                                  </td>
-                                  <td className="px-4 py-3 text-gray-300 text-sm">
-                                    {result.protocol ? (
-                                      <span className={`px-2 py-1 rounded-full text-xs ${
-                                        result.protocol === 'https' ? 'bg-green-900/30 text-green-400' : 'bg-yellow-900/30 text-yellow-400'
-                                      }`}>
-                                        {result.protocol.toUpperCase()}
-                                      </span>
-                                    ) : (
-                                      <span className="text-gray-500">-</span>
-                                    )}
-                                  </td>
-                                  <td className="px-4 py-3 text-gray-300 text-sm">
-                                    {result.success ? (
-                                      <span className="text-xs text-gray-400">
-                                        DNS: {result.dnsLookupTime}ms | 
-                                        Conn: {result.connectionTime}ms
-                                        {result.sslVerificationTime ? ` | SSL: ${result.sslVerificationTime}ms` : ''}
-                                        {result.ipAddress && (
-                                          <span className="ml-1 text-gray-500">({result.ipAddress})</span>
-                                        )}
-                                      </span>
-                                    ) : (
-                                      <span className="text-xs text-red-400/80">
-                                        {result.error}
-                                        {result.errorDetails && (
-                                          <span className="block mt-1 text-gray-500 text-xs">{result.errorDetails.split('\n')[0]}</span>
-                                        )}
-                                      </span>
-                                    )}
-                                  </td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        </div>
-                      </div>
-                      
-                      {/* Region Performance */}
-                      <div className="bg-gray-800 p-4 rounded-md">
-                        <h3 className="text-lg text-green-500 mb-3 font-mono">Performance by Region</h3>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-                          {Object.entries(geoPerformanceData.analysis.regionPerformance).map(([region, data]) => (
-                            <div key={region} className={`bg-gray-900/70 p-3 rounded border ${
-                              data.successRate < 30 ? 'border-red-500/30' : 'border-green-500/30'
-                            }`}>
-                              <h4 className={`text-sm mb-2 ${
-                                data.successRate < 30 ? 'text-red-400' : 'text-green-400'
-                              }`}>
-                                {region}
-                                {data.dominantErrorType === 'REGIONAL_RESTRICTION' && (
-                                  <span className="ml-2 px-1.5 py-0.5 bg-red-900/30 text-red-400 rounded-full text-xs">
-                                    Restricted
-                                  </span>
-                                )}
-                              </h4>
-                              <div className="space-y-2 text-xs text-gray-300">
-                                <div className="flex justify-between">
-                                  <span>Success Rate:</span>
-                                  <span className={`${
-                                    data.successRate > 90 ? 'text-green-400' :
-                                    data.successRate > 70 ? 'text-yellow-400' : 'text-red-400'
-                                  }`}>
-                                    {data.successRate.toFixed(1)}%
-                                  </span>
-                                </div>
-                                <div className="flex justify-between">
-                                  <span>Average Latency:</span>
-                                  <span>
-                                    {data.averageLatency === Infinity ? 
-                                      <span className="text-red-400">Failed</span> : 
-                                      `${data.averageLatency.toFixed(0)} ms`
-                                    }
-                                  </span>
-                                </div>
-                                {data.dominantProtocol && (
-                                  <div className="flex justify-between">
-                                    <span>Protocol:</span>
-                                    <span className={`${
-                                      data.dominantProtocol === 'https' ? 'text-green-400' : 'text-yellow-400'
-                                    }`}>
-                                      {data.dominantProtocol.toUpperCase()}
-                                    </span>
-                                  </div>
-                                )}
-                                {data.dominantErrorType && (
-                                  <div className="flex justify-between">
-                                    <span>Common Error:</span>
-                                    <span className="text-red-400">
-                                      {data.dominantErrorType.replace(/_/g, ' ')}
-                                    </span>
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                      
-                      {/* Restricted Regions Alert */}
-                      {geoPerformanceData.analysis.restrictedRegions && geoPerformanceData.analysis.restrictedRegions.length > 0 && (
-                        <div className="bg-red-900/20 p-4 rounded-md mt-4 border border-red-500/30">
-                          <h4 className="text-red-400 font-semibold mb-2 flex items-center">
-                            <FaExclamationTriangle className="mr-2" /> Regional Restrictions Detected
-                          </h4>
-                          <p className="text-sm text-gray-300 mb-3">
-                            The domain <span className="text-white font-semibold">{domain}</span> appears to be restricted or blocked in the following regions:
-                          </p>
-                          <ul className="space-y-2 text-sm">
-                            {geoPerformanceData.analysis.restrictedRegions.map((region, index) => (
-                              <li key={index} className="bg-gray-800/50 p-2 rounded flex items-start">
-                                <FaExclamationTriangle className="text-red-500 mt-0.5 mr-2 flex-shrink-0" />
-                                <div>
-                                  <span className="text-red-400 font-medium">{region.region}</span>
-                                  <span className="text-gray-400 ml-2">
-                                    ({region.successRate.toFixed(1)}% success rate)
-                                  </span>
-                                  <div className="text-xs text-gray-500 mt-1">
-                                    This region commonly blocks certain websites due to local regulations.
-                                  </div>
-                                </div>
-                              </li>
-                            ))}
-                          </ul>
-                          <p className="text-xs text-gray-400 mt-3">
-                            Regional restrictions can be due to government regulations, network policies, or content filtering systems.
-                            Users in these regions may need to use VPNs or proxy services to access this domain.
-                          </p>
-                        </div>
-                      )}
-                      
-                      {geoPerformanceData.analysis.failedLocations.length > 0 && (
-                        <div className="bg-gray-800/50 p-4 rounded-md mt-4 border border-red-500/20">
-                          <h4 className="text-red-400 font-semibold mb-2 flex items-center">
-                            <FaExclamationTriangle className="mr-2" /> Failed Locations
-                          </h4>
-                          <ul className="space-y-2 text-sm text-gray-400">
-                            {geoPerformanceData.analysis.failedLocations.map((location, index) => (
-                              <li key={index} className="flex items-start">
-                                <span className="inline-block w-2 h-2 rounded-full bg-red-500 mt-1.5 mr-2"></span>
-                                <div>
-                                  <span className="text-gray-300">{location.name}</span>: {location.error}
-                                  {location.errorDetails && (
-                                    <span className="block mt-1 text-gray-500 text-xs">{location.errorDetails}</span>
-                                  )}
-                                </div>
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
-                      )}
-                      
-                      <div className="bg-gray-800/50 p-4 rounded-md mt-4 border border-green-500/20">
-                        <h4 className="text-green-400 font-semibold mb-2 flex items-center">
-                          <FaQuestionCircle className="mr-2" /> About Global Performance Testing
-                        </h4>
-                        <p className="text-sm text-gray-400 mb-2">
-                          This test performs real DNS lookups and connection attempts to {domain} from our server, 
-                          with regional network conditions simulated based on typical connection patterns from various global locations.
-                        </p>
-                        <p className="text-sm text-gray-400 mb-2">
-                          The test measures three key metrics: DNS lookup time, connection establishment time, and SSL verification time (for HTTPS).
-                          These provide insight into how your domain might perform for visitors from different parts of the world.
-                        </p>
-                        <p className="text-sm text-gray-400">
-                          Our testing also simulates regional connectivity issues and content restrictions that may affect access to certain domains
-                          in specific regions. Results marked as "Restricted" indicate that the domain may be inaccessible in those regions.
-                        </p>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="bg-gray-800/50 border border-green-500/30 rounded-lg p-6 text-center">
-                      <div className="w-16 h-16 border-4 border-green-500/30 border-t-green-500 rounded-full animate-spin mx-auto mb-4"></div>
-                      <h3 className="text-lg font-semibold text-green-400 mb-2">Running Global Performance Tests</h3>
-                      <p className="text-gray-400">
-                        We're testing how {domain} performs from different regions around the world.
-                      </p>
-                      <p className="text-sm text-gray-500 mt-2">
-                        This may take a moment as we check connectivity from multiple locations.
                       </p>
                     </div>
                   )}
