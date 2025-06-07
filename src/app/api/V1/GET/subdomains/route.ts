@@ -70,10 +70,11 @@ const discoverSubdomains = async (domain: string) => {
   subdomains.add(domain);
   subdomains.add(`www.${domain}`);
   
+  // Try multiple sources for subdomain discovery
+  // 1. Certificate Transparency logs (crt.sh)
   try {
-    // Try to fetch subdomain data from crt.sh (Certificate Transparency logs)
     const crtshResponse = await axios.get(`https://crt.sh/?q=${encodeURIComponent(domain)}&output=json`, {
-      timeout: 8000,  // Reduced from 10000ms to 8000ms
+      timeout: 5000,  // Reduced timeout to fail faster
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
       }
@@ -96,6 +97,19 @@ const discoverSubdomains = async (domain: string) => {
     console.error(`Error fetching data from crt.sh:`, error);
     // Continue with other methods even if this one fails
   }
+  
+  // 2. Try to find common subdomains based on well-known patterns
+  const commonSubdomains = [
+    'www', 'mail', 'smtp', 'pop', 'imap', 'blog', 'shop', 
+    'store', 'dev', 'api', 'secure', 'admin', 'portal', 
+    'webmail', 'cdn', 'media', 'img', 'images', 'docs',
+    'support', 'help', 'ftp', 'cpanel', 'cloud'
+  ];
+  
+  // Add common patterns but don't wait for them to resolve
+  commonSubdomains.forEach(sub => {
+    subdomains.add(`${sub}.${domain}`);
+  });
   
   // Return a unique list of subdomains
   console.log(`Found ${subdomains.size} subdomains for ${domain}`);

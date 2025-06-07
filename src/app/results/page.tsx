@@ -1920,6 +1920,20 @@ function ResultsPageContent() {
                         <p className="text-gray-400 text-sm">
                           The logs below show certificates that have been issued for <span className="text-green-400">{domain}</span> over time.
                         </p>
+                        
+                        {/* Show warning if we're using fallback data */}
+                        {certHistoryData.length === 1 && certHistoryData[0].id === 'fallback-1' && (
+                          <div className="mt-3 bg-yellow-900/30 p-3 rounded-md border border-yellow-500/30">
+                            <div className="flex items-center text-yellow-400">
+                              <FaExclamationTriangle className="mr-2" />
+                              <span className="font-medium">Certificate data source unavailable</span>
+                            </div>
+                            <p className="text-gray-400 text-sm mt-1">
+                              We couldn't connect to the Certificate Transparency Log service. 
+                              Limited certificate information is being displayed.
+                            </p>
+                          </div>
+                        )}
                       </div>
                       
                       <div className="overflow-x-auto">
@@ -1962,25 +1976,59 @@ function ResultsPageContent() {
                         </table>
                       </div>
                       
-                      <div className="bg-gray-800/50 p-4 rounded-md mt-4 border border-green-500/20">
-                        <h4 className="text-green-400 font-semibold mb-2 flex items-center">
-                          <FaShieldAlt className="mr-2" /> Security Implications
-                        </h4>
-                        <ul className="space-y-2 text-sm text-gray-400">
-                          <li className="flex items-start">
-                            <span className="inline-block w-2 h-2 rounded-full bg-green-500 mt-1.5 mr-2"></span>
-                            <span>Unexpected certificates could indicate unauthorized issuance or potential phishing attempts</span>
-                          </li>
-                          <li className="flex items-start">
-                            <span className="inline-block w-2 h-2 rounded-full bg-green-500 mt-1.5 mr-2"></span>
-                            <span>Multiple issuers may be normal for organizations using different certificate authorities</span>
-                          </li>
-                          <li className="flex items-start">
-                            <span className="inline-block w-2 h-2 rounded-full bg-green-500 mt-1.5 mr-2"></span>
-                            <span>Certificates for unexpected subdomains could reveal hidden infrastructure</span>
-                          </li>
-                        </ul>
-                      </div>
+                      {/* Only show security implications if we have real data */}
+                      {(certHistoryData.length > 1 || certHistoryData[0].id !== 'fallback-1') && (
+                        <div className="bg-gray-800/50 p-4 rounded-md mt-4 border border-green-500/20">
+                          <h4 className="text-green-400 font-semibold mb-2 flex items-center">
+                            <FaShieldAlt className="mr-2" /> Security Implications
+                          </h4>
+                          <ul className="space-y-2 text-sm text-gray-400">
+                            <li className="flex items-start">
+                              <span className="inline-block w-2 h-2 rounded-full bg-green-500 mt-1.5 mr-2"></span>
+                              <span>Unexpected certificates could indicate unauthorized issuance or potential phishing attempts</span>
+                            </li>
+                            <li className="flex items-start">
+                              <span className="inline-block w-2 h-2 rounded-full bg-green-500 mt-1.5 mr-2"></span>
+                              <span>Multiple issuers may be normal for organizations using different certificate authorities</span>
+                            </li>
+                            <li className="flex items-start">
+                              <span className="inline-block w-2 h-2 rounded-full bg-green-500 mt-1.5 mr-2"></span>
+                              <span>Certificates for unexpected subdomains could reveal hidden infrastructure</span>
+                            </li>
+                          </ul>
+                        </div>
+                      )}
+                      
+                      {/* Retry button for CT logs */}
+                      {certHistoryData.length === 1 && certHistoryData[0].id === 'fallback-1' && (
+                        <div className="flex justify-center mt-4">
+                          <button 
+                            onClick={() => {
+                              setApiErrors(prev => ({...prev, certHistory: false}));
+                              setLoadingStatus('Retrying certificate history lookup...');
+                              fetch(`/api/V1/GET/certhistory?domain=${encodeURIComponent(domain)}&t=${Date.now()}`)
+                                .then(response => response.json())
+                                .then(data => {
+                                  if (data.certificates && data.certificates.length > 0) {
+                                    setCertHistoryData(data.certificates);
+                                    setLoadingStatus('Certificate history updated successfully');
+                                  } else {
+                                    setLoadingStatus('No additional certificate data available');
+                                  }
+                                })
+                                .catch(err => {
+                                  console.error('Error retrying cert history:', err);
+                                  setLoadingStatus('Failed to refresh certificate data');
+                                });
+                            }}
+                            className="bg-green-900/30 text-green-400 px-4 py-2 rounded-md border border-green-500/30 
+                                     hover:bg-green-900/50 transition-colors flex items-center"
+                          >
+                            <FaRedoAlt className="mr-2" />
+                            Retry Certificate Lookup
+                          </button>
+                        </div>
+                      )}
                     </div>
                   ) : (
                     <div className="bg-gray-800/50 border border-green-500/30 rounded-lg p-6 text-center">
@@ -1992,6 +2040,33 @@ function ResultsPageContent() {
                       <p className="text-sm text-gray-500 mt-2">
                         This may indicate that no SSL certificates have been issued for this domain, or that they were issued before CT logging became widespread.
                       </p>
+                      
+                      {/* Add retry button */}
+                      <button 
+                        onClick={() => {
+                          setApiErrors(prev => ({...prev, certHistory: false}));
+                          setLoadingStatus('Retrying certificate history lookup...');
+                          fetch(`/api/V1/GET/certhistory?domain=${encodeURIComponent(domain)}&t=${Date.now()}`)
+                            .then(response => response.json())
+                            .then(data => {
+                              if (data.certificates && data.certificates.length > 0) {
+                                setCertHistoryData(data.certificates);
+                                setLoadingStatus('Certificate history updated successfully');
+                              } else {
+                                setLoadingStatus('No certificate data available');
+                              }
+                            })
+                            .catch(err => {
+                              console.error('Error retrying cert history:', err);
+                              setLoadingStatus('Failed to refresh certificate data');
+                            });
+                        }}
+                        className="bg-green-900/30 text-green-400 px-4 py-2 rounded-md border border-green-500/30 
+                                 hover:bg-green-900/50 transition-colors flex items-center mx-auto mt-4"
+                      >
+                        <FaRedoAlt className="mr-2" />
+                        Retry Certificate Lookup
+                      </button>
                     </div>
                   )}
                 </motion.div>

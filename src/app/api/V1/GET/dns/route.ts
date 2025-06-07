@@ -14,12 +14,91 @@ const resolvePtr = promisify(dns.resolvePtr);
 const resolveNaptr = promisify(dns.resolveNaptr);
 const resolveSoa = promisify(dns.resolveSoa);
 const resolveCaa = promisify(dns.resolveCaa);
-// Additional records - note that some records types like URI, TLSA, SSHFP, SMIMEA, LOC, DNSKEY
-// are not directly supported by the Node.js dns module
-// We'll add specialized handling for these
+
+// Define interfaces for different DNS record types
+interface BaseDnsRecord {
+  name: string;
+  ttl?: number;
+  type: string;
+}
+
+interface ARecord extends BaseDnsRecord {
+  type: 'A';
+  value: string; // IP address
+}
+
+interface AAAARecord extends BaseDnsRecord {
+  type: 'AAAA';
+  value: string; // IPv6 address
+}
+
+interface MXRecord extends BaseDnsRecord {
+  type: 'MX';
+  priority: number;
+  value: string; // Mail server
+}
+
+interface TXTRecord extends BaseDnsRecord {
+  type: 'TXT';
+  value: string; // Text content
+}
+
+interface NSRecord extends BaseDnsRecord {
+  type: 'NS';
+  value: string; // Name server
+}
+
+interface SRVRecord extends BaseDnsRecord {
+  type: 'SRV';
+  priority: number;
+  weight: number;
+  port: number;
+  target: string;
+  value: string; // Combined representation
+}
+
+interface PTRRecord extends BaseDnsRecord {
+  type: 'PTR';
+  value: string; // Pointer
+}
+
+interface NAPTRRecord extends BaseDnsRecord {
+  type: 'NAPTR';
+  order: number;
+  preference: number;
+  flags: string;
+  service: string;
+  regexp: string;
+  replacement: string;
+  value: string; // Combined representation
+}
+
+interface SOARecord extends BaseDnsRecord {
+  type: 'SOA';
+  nsname: string;
+  hostmaster: string;
+  serial: number;
+  refresh: number;
+  retry: number;
+  expire: number;
+  minttl: number;
+  value: string; // Combined representation
+}
+
+interface CAARecord extends BaseDnsRecord {
+  type: 'CAA';
+  flags: number;
+  tag: string;
+  value: string;
+}
+
+interface GenericRecord extends BaseDnsRecord {
+  value: string;
+  [key: string]: any; // For additional fields specific to each record type
+}
 
 // Execute a dig command and parse the output for unsupported record types
-async function execDig(domain: string, recordType: string): Promise<any[]> {
+async function execDig(domain: string, recordType: string): Promise<GenericRecord[]> {
   try {
     const { exec } = require('child_process');
     const util = require('util');
@@ -28,25 +107,92 @@ async function execDig(domain: string, recordType: string): Promise<any[]> {
     const { stdout } = await execPromise(`dig +short ${domain} ${recordType}`);
     if (!stdout.trim()) return [];
     
-    return stdout.trim().split('\n').map((line: string) => ({
-      name: domain,
-      ttl: 3600, // Default TTL
-      type: recordType,
-      value: line.trim()
-    }));
+    // Add proper parsing for specific record types
+    switch (recordType) {
+      case 'TLSA':
+        return stdout.trim().split('\n').map((line: string) => {
+          const parts = line.trim().split(' ');
+          return {
+            name: domain,
+            ttl: 3600,
+            type: recordType,
+            usage: parts[0] ? parseInt(parts[0]) : undefined,
+            selector: parts[1] ? parseInt(parts[1]) : undefined,
+            matchingType: parts[2] ? parseInt(parts[2]) : undefined,
+            certificateData: parts[3] || '',
+            value: line.trim()
+          };
+        });
+        
+      case 'SSHFP':
+        return stdout.trim().split('\n').map((line: string) => {
+          const parts = line.trim().split(' ');
+          return {
+            name: domain,
+            ttl: 3600,
+            type: recordType,
+            algorithm: parts[0] ? parseInt(parts[0]) : undefined,
+            fingerprintType: parts[1] ? parseInt(parts[1]) : undefined,
+            fingerprint: parts[2] || '',
+            value: line.trim()
+          };
+        });
+        
+      case 'DNSKEY':
+        return stdout.trim().split('\n').map((line: string) => {
+          const parts = line.trim().split(' ');
+          return {
+            name: domain,
+            ttl: 3600,
+            type: recordType,
+            flags: parts[0] ? parseInt(parts[0]) : undefined,
+            protocol: parts[1] ? parseInt(parts[1]) : undefined,
+            algorithm: parts[2] ? parseInt(parts[2]) : undefined,
+            publicKey: parts[3] || '',
+            value: line.trim()
+          };
+        });
+        
+      case 'URI':
+        return stdout.trim().split('\n').map((line: string) => {
+          const parts = line.trim().split(' ');
+          return {
+            name: domain,
+            ttl: 3600,
+            type: recordType,
+            priority: parts[0] ? parseInt(parts[0]) : undefined,
+            weight: parts[1] ? parseInt(parts[1]) : undefined,
+            target: parts.slice(2).join(' ') || '',
+            value: line.trim()
+          };
+        });
+        
+      case 'SVCB':
+        return stdout.trim().split('\n').map((line: string) => {
+          const parts = line.trim().split(' ');
+          return {
+            name: domain,
+            ttl: 3600,
+            type: recordType,
+            priority: parts[0] ? parseInt(parts[0]) : undefined,
+            targetName: parts[1] || '',
+            params: parts.slice(2).join(' ') || '',
+            value: line.trim()
+          };
+        });
+        
+      default:
+        return stdout.trim().split('\n').map((line: string) => ({
+          name: domain,
+          ttl: 3600,
+          type: recordType,
+          value: line.trim()
+        }));
+    }
   } catch (e) {
     console.error(`Error executing dig for ${recordType} records:`, e);
     return [];
   }
-}
-
-// Add interface for CAA record
-interface CaaRecord {
-  issuer?: string;
-  critical: number;
-  flags: number;
-  tag: string;
-  value: string;
 }
 
 export async function GET(request: Request) {
@@ -73,7 +219,7 @@ export async function GET(request: Request) {
             ttl: 3600,
             type: 'A',
             value: ip
-          }));
+          } as ARecord));
         })
         .catch(() => {}),
       
@@ -85,7 +231,7 @@ export async function GET(request: Request) {
             ttl: 3600,
             type: 'AAAA',
             value: ip
-          }));
+          } as AAAARecord));
         })
         .catch(() => {}),
       
@@ -98,7 +244,7 @@ export async function GET(request: Request) {
             type: 'MX',
             priority: record.priority,
             value: record.exchange
-          }));
+          } as MXRecord));
         })
         .catch(() => {}),
       
@@ -110,7 +256,7 @@ export async function GET(request: Request) {
             ttl: 3600,
             type: 'TXT',
             value: values.join(' ')
-          }));
+          } as TXTRecord));
         })
         .catch(() => {}),
       
@@ -122,7 +268,7 @@ export async function GET(request: Request) {
             ttl: 3600,
             type: 'NS',
             value: server
-          }));
+          } as NSRecord));
         })
         .catch(() => {}),
       
@@ -136,8 +282,9 @@ export async function GET(request: Request) {
             priority: record.priority,
             weight: record.weight,
             port: record.port,
-            value: record.name
-          }));
+            target: record.name,
+            value: `${record.priority} ${record.weight} ${record.port} ${record.name}`
+          } as SRVRecord));
         })
         .catch(() => {}),
       
@@ -149,7 +296,7 @@ export async function GET(request: Request) {
             ttl: 3600,
             type: 'PTR',
             value: ptr
-          }));
+          } as PTRRecord));
         })
         .catch(() => {}),
       
@@ -167,7 +314,7 @@ export async function GET(request: Request) {
             regexp: record.regexp,
             replacement: record.replacement,
             value: `${record.order} ${record.preference} "${record.flags}" "${record.service}" "${record.regexp}" ${record.replacement}`
-          }));
+          } as NAPTRRecord));
         })
         .catch(() => {}),
       
@@ -187,7 +334,7 @@ export async function GET(request: Request) {
               expire: soaRecord.expire,
               minttl: soaRecord.minttl,
               value: `${soaRecord.nsname} ${soaRecord.hostmaster} ${soaRecord.serial} ${soaRecord.refresh} ${soaRecord.retry} ${soaRecord.expire} ${soaRecord.minttl}`
-            }];
+            } as SOARecord];
           }
         })
         .catch(() => {}),
@@ -202,13 +349,13 @@ export async function GET(request: Request) {
             flags: record.flags,
             tag: record.tag,
             value: record.value
-          }));
+          } as CAARecord));
         })
         .catch(() => {})
     ];
     
     // Additional record types using dig (if available on server)
-    const additionalRecordTypes = ['DNSKEY', 'TLSA', 'SSHFP', 'URI', 'SVCB'];
+    const additionalRecordTypes = ['DNSKEY', 'TLSA', 'SSHFP', 'URI', 'SVCB', 'LOC', 'SMIMEA'];
     const digPromises = additionalRecordTypes.map(recordType => 
       execDig(domain, recordType)
         .then(results => {
@@ -225,9 +372,17 @@ export async function GET(request: Request) {
     const successfulQueries = Object.keys(records).length;
     await updateDNSQueryCount(successfulQueries);
     
-    return NextResponse.json({ domain, dnsRecords: records });
+    return NextResponse.json({ 
+      domain, 
+      dnsRecords: records,
+      recordTypes: Object.keys(records)
+    });
   } catch (error) {
     console.error(`Error processing DNS for domain ${domain}:`, error);
-    return NextResponse.json({ error: 'Failed to process DNS information' }, { status: 500 });
+    return NextResponse.json({ 
+      error: 'Failed to process DNS information',
+      domain,
+      dnsRecords: {}
+    }, { status: 200 }); // Return 200 with empty data instead of 500
   }
 } 
