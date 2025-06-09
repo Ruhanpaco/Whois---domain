@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { FaSearch, FaNetworkWired, FaLock, FaServer, FaGlobe } from 'react-icons/fa';
+import { FaSearch, FaNetworkWired, FaLock, FaServer, FaGlobe, FaCheckCircle, FaTimesCircle, FaExclamationTriangle, FaCalendarAlt } from 'react-icons/fa';
 
 interface StatisticItem {
   icon: React.ReactNode;
@@ -10,6 +10,7 @@ interface StatisticItem {
   value: number;
   prefix?: string;
   suffix?: string;
+  color?: string;
 }
 
 export default function StatisticsCounter() {
@@ -19,15 +20,24 @@ export default function StatisticsCounter() {
     totalSSLChecks: number;
     totalWHOISLookups: number;
     totalSubdomainsDiscovered: number;
-    topSearchedDomains?: Array<{domain: string, count: number}>;
-    tldStatistics?: Record<string, number>;
+    sslStatistics?: {
+      valid: number;
+      invalid: number;
+      expired: number;
+    };
     averageSubdomainsPerDomain?: number;
+    lastUpdated?: string;
   }>({
     totalSearches: 0,
     totalDNSQueries: 0,
     totalSSLChecks: 0,
     totalWHOISLookups: 0,
     totalSubdomainsDiscovered: 0,
+    sslStatistics: {
+      valid: 0,
+      invalid: 0,
+      expired: 0
+    },
   });
 
   const [isLoading, setIsLoading] = useState(true);
@@ -60,7 +70,13 @@ export default function StatisticsCounter() {
     return () => clearInterval(interval);
   }, []);
 
-  const statisticsItems: StatisticItem[] = [
+  const formatDate = (dateString?: string) => {
+    if (!dateString) return 'N/A';
+    const date = new Date(dateString);
+    return date.toLocaleString();
+  };
+
+  const mainStatisticsItems: StatisticItem[] = [
     {
       icon: <FaSearch className="text-green-500" />,
       title: 'Total Searches',
@@ -93,6 +109,27 @@ export default function StatisticsCounter() {
     },
   ];
 
+  const sslStatisticsItems: StatisticItem[] = [
+    {
+      icon: <FaCheckCircle className="text-green-500" />,
+      title: 'Valid Certificates',
+      value: stats.sslStatistics?.valid || 0,
+      color: 'green',
+    },
+    {
+      icon: <FaTimesCircle className="text-red-500" />,
+      title: 'Invalid Certificates',
+      value: stats.sslStatistics?.invalid || 0,
+      color: 'red',
+    },
+    {
+      icon: <FaExclamationTriangle className="text-yellow-500" />,
+      title: 'Expired Certificates',
+      value: stats.sslStatistics?.expired || 0,
+      color: 'yellow',
+    },
+  ];
+
   if (isLoading) {
     return (
       <div className="w-full flex justify-center py-4">
@@ -113,19 +150,26 @@ export default function StatisticsCounter() {
 
   return (
     <div className="w-full bg-gray-900/70 rounded-md border border-green-500/30 p-4 mt-6">
-      <div className="flex items-center text-xs text-gray-400 mb-4">
-        <FaServer className="mr-2 text-green-500" />
-        <span>Domain Intelligence Statistics</span>
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center text-xs text-gray-400">
+          <FaServer className="mr-2 text-green-500" />
+          <span>Global System Statistics</span>
+        </div>
+        <div className="text-xs text-gray-400 flex items-center">
+          <FaCalendarAlt className="mr-1 text-green-500" />
+          <span>Last updated: {formatDate(stats.lastUpdated)}</span>
+        </div>
       </div>
       
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-        {statisticsItems.map((item, index) => (
+      {/* Main statistics grid */}
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
+        {mainStatisticsItems.map((item, index) => (
           <motion.div 
             key={index}
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.1 * index }}
-            className="bg-black/40 p-3 rounded border border-green-500/20"
+            className="bg-black/40 p-3 rounded border border-green-500/20 hover:border-green-500/40 transition-colors"
           >
             <div className="flex items-center justify-between mb-2">
               {item.icon}
@@ -138,18 +182,36 @@ export default function StatisticsCounter() {
         ))}
       </div>
       
-      {stats.topSearchedDomains && stats.topSearchedDomains.length > 0 && (
-        <div className="mt-6">
-          <div className="text-xs text-gray-400 mb-2">Top Searched Domains</div>
-          <div className="bg-black/40 p-3 rounded border border-green-500/20">
-            <div className="grid grid-cols-2 gap-2">
-              {stats.topSearchedDomains.slice(0, 6).map((item, index) => (
-                <div key={index} className="flex justify-between">
-                  <span className="text-xs text-green-400">{item.domain}</span>
-                  <span className="text-xs text-gray-400">{item.count}</span>
+      {/* SSL statistics */}
+      <div className="mt-4 mb-2">
+        <div className="text-xs text-gray-400 mb-2 border-b border-gray-700 pb-2">SSL Certificate Analysis</div>
+        <div className="grid grid-cols-3 gap-4">
+          {sslStatisticsItems.map((item, index) => (
+            <motion.div 
+              key={index}
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.1 * (index + 5) }}
+              className={`bg-black/40 p-3 rounded border border-${item.color}-500/20 hover:border-${item.color}-500/40 transition-colors`}
+            >
+              <div className="flex items-center justify-between mb-2">
+                {item.icon}
+                <div className={`text-${item.color}-400 font-mono text-lg`}>
+                  {item.value.toLocaleString()}
                 </div>
-              ))}
-            </div>
+              </div>
+              <div className="text-xs text-gray-400">{item.title}</div>
+            </motion.div>
+          ))}
+        </div>
+      </div>
+      
+      {/* Additional stats */}
+      {stats.averageSubdomainsPerDomain !== undefined && (
+        <div className="mt-4 p-3 bg-black/40 rounded border border-green-500/20">
+          <div className="text-xs text-gray-400">Average Subdomains per Domain</div>
+          <div className="text-green-400 font-mono text-lg mt-1">
+            {stats.averageSubdomainsPerDomain.toFixed(1)}
           </div>
         </div>
       )}
