@@ -5,7 +5,6 @@ import { useSearchParams } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { FaServer, FaGlobe, FaShieldAlt, FaTerminal, FaArrowLeft, FaCopy, FaClock, FaCalendarAlt, FaExclamationTriangle, FaCheckCircle, FaTimesCircle, FaQuestionCircle, FaSitemap, FaLink, FaRocket, FaCode, FaHistory, FaRedoAlt } from 'react-icons/fa';
 import Link from 'next/link';
-import DonationMini from '@/components/DonationMini';
 
 // Define interfaces for the different data types
 interface WhoisData {
@@ -661,11 +660,6 @@ function ResultsPageContent() {
                 </div>
               </div>
               
-              {/* Add DonationMini component here */}
-              <div className="mb-6">
-                <DonationMini />
-              </div>
-              
               <div className="bg-gray-900/70 border border-green-500/30 rounded-md overflow-hidden">
                 {/* ... rest of existing sidebar content ... */}
               </div>
@@ -683,7 +677,7 @@ function ResultsPageContent() {
                   } ${apiErrors.whois ? 'opacity-50' : ''}`}
                   disabled={apiErrors.whois}
                 >
-                  <FaServer className="mr-2" />
+                  <FaGlobe className="mr-2" />
                   WHOIS {apiErrors.whois && <FaExclamationTriangle className="ml-1 text-yellow-500" title="Data fetch failed" />}
                 </button>
                 <button
@@ -695,7 +689,7 @@ function ResultsPageContent() {
                   } ${apiErrors.dns ? 'opacity-50' : ''}`}
                   disabled={apiErrors.dns}
                 >
-                  <FaGlobe className="mr-2" />
+                  <FaServer className="mr-2" />
                   DNS {apiErrors.dns && <FaExclamationTriangle className="ml-1 text-yellow-500" title="Data fetch failed" />}
                 </button>
                 <button
