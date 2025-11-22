@@ -199,17 +199,34 @@ export const updateWHOISLookupCount = async () => {
 // Update certificate history lookup count
 export const updateCertHistoryLookupCount = async () => {
   await connectMongoose();
-  
+
   try {
     const stats = await initializeStatistics();
     if (!stats) return;
-    
+
     stats.totalCertHistoryLookups += 1;
     stats.lastUpdated = new Date();
     await stats.save();
     console.log(`Certificate history lookup count updated`);
   } catch (error) {
     console.error('Error updating certificate history lookup count:', error);
+  }
+};
+
+// Update domain history lookup count
+export const updateDomainHistoryLookupCount = async () => {
+  await connectMongoose();
+
+  try {
+    const stats = await initializeStatistics();
+    if (!stats) return;
+
+    stats.totalDomainHistoryLookups = (stats.totalDomainHistoryLookups || 0) + 1;
+    stats.lastUpdated = new Date();
+    await stats.save();
+    console.log(`Domain history lookup count updated`);
+  } catch (error) {
+    console.error('Error updating domain history lookup count:', error);
   }
 };
 
