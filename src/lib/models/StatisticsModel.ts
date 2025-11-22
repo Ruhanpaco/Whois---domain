@@ -27,6 +27,10 @@ const StatisticsSchema = new mongoose.Schema({
     type: Number,
     default: 0
   },
+  totalDomainHistoryLookups: {
+    type: Number,
+    default: 0
+  },
   
   // Domain statistics
   searchedDomains: {
