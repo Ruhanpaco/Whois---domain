@@ -5,7 +5,6 @@ import { useSearchParams } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { FaServer, FaGlobe, FaShieldAlt, FaTerminal, FaArrowLeft, FaCopy, FaClock, FaCalendarAlt, FaExclamationTriangle, FaCheckCircle, FaTimesCircle, FaQuestionCircle, FaSitemap, FaLink, FaRocket, FaCode, FaHistory, FaRedoAlt } from 'react-icons/fa';
 import Link from 'next/link';
-import DonationMini from '@/components/DonationMini';
 
 // Define interfaces for the different data types
 interface WhoisData {
@@ -98,6 +97,28 @@ interface CertificateInfo {
   serial_number: string;
 }
 
+interface DomainHistoryEvent {
+  action: string;
+  date: string;
+  description: string;
+  registrar?: string;
+}
+
+interface DomainHistoryData {
+  domain: string;
+  events: DomainHistoryEvent[];
+  activationCount: number;
+  deactivationCount: number;
+  transferCount: number;
+  ownershipChanges: number;
+  currentRegistrar?: string;
+  registrant?: string;
+  statuses?: string[];
+  nameservers?: string[];
+  usingFallback?: boolean;
+  warning?: string | null;
+}
+
 // Loading component
 function ResultsPageLoader() {
   return (
@@ -119,18 +140,20 @@ function ResultsPageContent() {
   const [loading, setLoading] = useState(true);
   const [loadingStatus, setLoadingStatus] = useState<string>('Initializing...');
   const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'whois' | 'dns' | 'ssl' | 'email' | 'subdomains' | 'certhistory'>('whois');
+  const [activeTab, setActiveTab] = useState<'whois' | 'dns' | 'ssl' | 'email' | 'subdomains' | 'certhistory' | 'history'>('whois');
   const [whoisData, setWhoisData] = useState<WhoisData | null>(null);
   const [dnsData, setDnsData] = useState<DnsData | null>(null);
   const [sslData, setSslData] = useState<SslInfo | null>(null);
   const [subdomains, setSubdomains] = useState<Subdomain[]>([]);
   const [certHistoryData, setCertHistoryData] = useState<CertificateInfo[]>([]);
+  const [domainHistoryData, setDomainHistoryData] = useState<DomainHistoryData | null>(null);
   const [apiErrors, setApiErrors] = useState<{[key: string]: boolean}>({
     whois: false,
     dns: false,
     ssl: false,
     subdomains: false,
-    certHistory: false
+    certHistory: false,
+    history: false
   });
   // Add state to track which subdomains are being rechecked
   const [recheckingSSL, setRecheckingSSL] = useState<{[key: string]: boolean}>({});
@@ -141,7 +164,7 @@ function ResultsPageContent() {
     completed: number;
     current: string;
   }>({
-    total: 5, // WHOIS, DNS, SSL, Subdomains, CertHistory
+    total: 6, // WHOIS, DNS, SSL, Subdomains, DomainHistory, CertHistory
     completed: 0,
     current: 'Preparing to fetch data...'
   });
@@ -155,11 +178,11 @@ function ResultsPageContent() {
       setLoading(true);
       setError(null);
       setLoadingStatus('Initializing checks...');
-      setLoadingProgress({
-        total: 5, // WHOIS, DNS, SSL, Subdomains, CertHistory
-        completed: 0,
-        current: 'Starting domain analysis'
-      });
+        setLoadingProgress({
+          total: 6, // WHOIS, DNS, SSL, Subdomains, DomainHistory, CertHistory
+          completed: 0,
+          current: 'Starting domain analysis'
+        });
       
       // Start the timer
       const startTime = Date.now();
@@ -173,7 +196,8 @@ function ResultsPageContent() {
         dns: false,
         ssl: false,
         subdomains: false,
-        certHistory: false
+        certHistory: false,
+        history: false
       });
       
       try {
@@ -208,9 +232,14 @@ function ResultsPageContent() {
             // Clear the SSL timer when done
             clearInterval(sslTimer);
           });
-        
+
+        // Domain history lookup
+        setLoadingStatus('Building domain history...');
+        setLoadingProgress(prev => ({...prev, current: 'Reviewing lifecycle events', completed: 4}));
+        const domainHistoryPromise = fetch(`/api/V1/GET/domainhistory?domain=${encodeURIComponent(domain)}`);
+
         // Execute all fetches in parallel
-        const [whoisResponse, dnsResponse, subdomainsResponse, sslResponse] = 
+        const [whoisResponse, dnsResponse, subdomainsResponse, sslResponse, domainHistoryResponse] =
           await Promise.all([
             whoisPromise.catch(err => {
               console.error('Error fetching WHOIS data:', err);
@@ -231,6 +260,11 @@ function ResultsPageContent() {
               console.error('Error fetching SSL data:', err);
               setApiErrors(prev => ({...prev, ssl: true}));
               return new Response(JSON.stringify({ error: 'Failed to fetch SSL data' }));
+            }),
+            domainHistoryPromise.catch(err => {
+              console.error('Error fetching domain history data:', err);
+              setApiErrors(prev => ({...prev, history: true}));
+              return new Response(JSON.stringify({ error: 'Failed to fetch domain history data' }));
             })
           ]);
         
@@ -262,9 +296,13 @@ function ResultsPageContent() {
         
         setLoadingStatus('Processing SSL data...');
         const sslDataResult = await processResponse(sslResponse, 'ssl');
-        
+
+        setLoadingStatus('Analyzing domain history...');
+        setLoadingProgress(prev => ({...prev, current: 'Tracing ownership changes', completed: 4}));
+        const domainHistoryDataResult = await processResponse(domainHistoryResponse, 'history');
+
         setLoadingStatus('Checking certificate history...');
-        setLoadingProgress(prev => ({...prev, current: 'Analyzing certificate transparency logs', completed: 4}));
+        setLoadingProgress(prev => ({...prev, current: 'Analyzing certificate transparency logs', completed: 5}));
         const certHistoryPromise = fetch(`/api/V1/GET/certhistory?domain=${encodeURIComponent(domain)}`);
         
         const certHistoryResponse = await certHistoryPromise.catch(err => {
@@ -281,12 +319,14 @@ function ResultsPageContent() {
         console.log('SSL Data:', sslDataResult);
         console.log('Subdomains Data:', subdomainsDataResult);
         console.log('Certificate History Data:', certHistoryDataResult);
+        console.log('Domain History Data:', domainHistoryDataResult);
         
         // Set data safely with null fallbacks
         setWhoisData(whoisDataResult?.whoisData || null);
         setDnsData(dnsDataResult?.dnsRecords || null);
         setSslData(sslDataResult?.sslInfo || null);
-        
+        setDomainHistoryData(domainHistoryDataResult || null);
+
         // Process subdomains and check if the main domain is included
         const subdomainsData = subdomainsDataResult?.subdomains || [];
         setSubdomains(subdomainsData);
@@ -301,8 +341,8 @@ function ResultsPageContent() {
         
         // Set certificate history data
         setCertHistoryData(certHistoryDataResult?.certificates || []);
-        
-        setLoadingProgress(prev => ({...prev, completed: 5, current: 'Complete'}));
+
+        setLoadingProgress(prev => ({...prev, completed: 6, current: 'Complete'}));
         setLoadingStatus(`Domain analysis complete in ${Math.floor((Date.now() - startTime) / 1000)}s`);
         
         // If all APIs failed, show a general error
@@ -595,6 +635,14 @@ function ResultsPageContent() {
                   }`}>
                     {loadingProgress.completed >= 5 ? '✓' : '5'}
                   </span>
+                  Domain History Reconstruction
+                </li>
+                <li className={`flex items-center ${loadingProgress.completed >= 6 ? 'text-green-400' : 'text-gray-500'}`}>
+                  <span className={`w-4 h-4 mr-2 rounded-full flex items-center justify-center ${
+                    loadingProgress.completed >= 6 ? 'bg-green-900/50 text-green-500' : 'bg-gray-800'
+                  }`}>
+                    {loadingProgress.completed >= 6 ? '✓' : '6'}
+                  </span>
                   Certificate Transparency Analysis
                 </li>
               </ul>
@@ -652,6 +700,13 @@ function ResultsPageContent() {
                     {apiErrors.subdomains && <FaExclamationTriangle className="ml-auto text-yellow-500" title="Error fetching data" />}
                   </button>
                   <button
+                    onClick={() => setActiveTab('history')}
+                    className={`w-full text-left px-3 py-2 rounded mb-1 text-sm flex items-center ${activeTab === 'history' ? 'bg-green-900/30 text-green-400' : 'text-gray-400 hover:text-green-400 hover:bg-green-900/10'}`}
+                  >
+                    <FaHistory className="mr-2" /> Domain History
+                    {apiErrors.history && <FaExclamationTriangle className="ml-auto text-yellow-500" title="Error fetching data" />}
+                  </button>
+                  <button
                     onClick={() => setActiveTab('certhistory')}
                     className={`w-full text-left px-3 py-2 rounded mb-1 text-sm flex items-center ${activeTab === 'certhistory' ? 'bg-green-900/30 text-green-400' : 'text-gray-400 hover:text-green-400 hover:bg-green-900/10'}`}
                   >
@@ -659,11 +714,6 @@ function ResultsPageContent() {
                     {apiErrors.certHistory && <FaExclamationTriangle className="ml-auto text-yellow-500" title="Error fetching data" />}
                   </button>
                 </div>
-              </div>
-              
-              {/* Add DonationMini component here */}
-              <div className="mb-6">
-                <DonationMini />
               </div>
               
               <div className="bg-gray-900/70 border border-green-500/30 rounded-md overflow-hidden">
@@ -683,7 +733,7 @@ function ResultsPageContent() {
                   } ${apiErrors.whois ? 'opacity-50' : ''}`}
                   disabled={apiErrors.whois}
                 >
-                  <FaServer className="mr-2" />
+                  <FaGlobe className="mr-2" />
                   WHOIS {apiErrors.whois && <FaExclamationTriangle className="ml-1 text-yellow-500" title="Data fetch failed" />}
                 </button>
                 <button
@@ -695,7 +745,7 @@ function ResultsPageContent() {
                   } ${apiErrors.dns ? 'opacity-50' : ''}`}
                   disabled={apiErrors.dns}
                 >
-                  <FaGlobe className="mr-2" />
+                  <FaServer className="mr-2" />
                   DNS {apiErrors.dns && <FaExclamationTriangle className="ml-1 text-yellow-500" title="Data fetch failed" />}
                 </button>
                 <button
@@ -721,6 +771,18 @@ function ResultsPageContent() {
                 >
                   <FaSitemap className="mr-2" />
                   Subdomains {apiErrors.subdomains && <FaExclamationTriangle className="ml-1 text-yellow-500" title="Data fetch failed" />}
+                </button>
+                <button
+                  onClick={() => setActiveTab('history')}
+                  className={`px-4 py-3 rounded-md flex items-center ${
+                    activeTab === 'history'
+                      ? 'bg-green-500/20 text-green-400 border border-green-500/30'
+                      : 'text-gray-400 hover:text-green-400 hover:bg-black/30'
+                  } ${apiErrors.history ? 'opacity-50' : ''}`}
+                  disabled={apiErrors.history}
+                >
+                  <FaHistory className="mr-2" />
+                  History {apiErrors.history && <FaExclamationTriangle className="ml-1 text-yellow-500" title="Data fetch failed" />}
                 </button>
                 <button
                   onClick={() => setActiveTab('certhistory')}
@@ -1941,6 +2003,119 @@ function ResultsPageContent() {
                       <p className="text-gray-400">
                         We couldn&apos;t find any subdomains for {domain}.
                       </p>
+                    </div>
+                  )}
+                </motion.div>
+              </motion.div>
+            )}
+
+            {activeTab === 'history' && (
+              <motion.div
+                variants={container}
+                initial="hidden"
+                animate="show"
+                className="bg-gray-900 p-6 rounded-lg border border-green-500/30"
+              >
+                <motion.div variants={item} className="mb-6">
+                  <div className="flex items-center justify-between mb-4">
+                    <h2 className="text-xl font-bold text-green-400 flex items-center">
+                      <FaHistory className="mr-3 text-green-500" />
+                      Domain History Timeline
+                    </h2>
+                    {domainHistoryData?.events && (
+                      <div className="px-3 py-1 bg-gray-800 rounded-full text-sm text-green-500 font-mono">
+                        Events: {domainHistoryData?.events.length || 0}
+                      </div>
+                    )}
+                  </div>
+
+                  {domainHistoryData?.warning && (
+                    <div className="mb-4 bg-yellow-900/30 border border-yellow-500/40 rounded-md p-3 flex items-start">
+                      <FaExclamationTriangle className="text-yellow-400 mr-3 mt-1" />
+                      <div>
+                        <h4 className="text-yellow-400 font-semibold text-sm">Limited data</h4>
+                        <p className="text-gray-300 text-sm">{domainHistoryData.warning}</p>
+                      </div>
+                    </div>
+                  )}
+
+                  {domainHistoryData ? (
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
+                      <div className="bg-gray-800 p-4 rounded-md border border-green-500/30">
+                        <p className="text-gray-400 text-xs uppercase">Activations</p>
+                        <p className="text-3xl font-bold text-green-400">{domainHistoryData.activationCount}</p>
+                        <p className="text-xs text-gray-500">Registrations or restorations</p>
+                      </div>
+                      <div className="bg-gray-800 p-4 rounded-md border border-green-500/30">
+                        <p className="text-gray-400 text-xs uppercase">Deactivations</p>
+                        <p className="text-3xl font-bold text-green-400">{domainHistoryData.deactivationCount}</p>
+                        <p className="text-xs text-gray-500">Expirations or deletions</p>
+                      </div>
+                      <div className="bg-gray-800 p-4 rounded-md border border-green-500/30">
+                        <p className="text-gray-400 text-xs uppercase">Ownership changes</p>
+                        <p className="text-3xl font-bold text-green-400">{domainHistoryData.ownershipChanges}</p>
+                        <p className="text-xs text-gray-500">Transfer events detected</p>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="bg-gray-800/50 border border-green-500/30 rounded-lg p-6 text-center mb-6">
+                      <FaExclamationTriangle className="text-yellow-400 mx-auto mb-4" size={32} />
+                      <p className="text-gray-300">Domain history could not be loaded.</p>
+                    </div>
+                  )}
+
+                  {domainHistoryData?.events && domainHistoryData.events.length > 0 ? (
+                    <div className="space-y-4">
+                      <div className="bg-gray-800 p-4 rounded-md border border-green-500/30">
+                        <h3 className="text-lg text-green-500 mb-2 font-mono">Ownership & Registrar</h3>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+                          <div className="flex justify-between">
+                            <span className="text-gray-400">Current Registrar:</span>
+                            <span className="text-gray-200 font-mono text-right">{domainHistoryData.currentRegistrar || 'Unknown'}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-gray-400">Registrant:</span>
+                            <span className="text-gray-200 font-mono text-right">{domainHistoryData.registrant || 'Not available'}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-gray-400">Statuses:</span>
+                            <span className="text-gray-200 font-mono text-right truncate max-w-[180px]" title={domainHistoryData.statuses?.join(', ') || 'Unknown'}>
+                              {domainHistoryData.statuses?.join(', ') || 'Unknown'}
+                            </span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-gray-400">Nameservers:</span>
+                            <span className="text-gray-200 font-mono text-right truncate max-w-[180px]" title={domainHistoryData.nameservers?.join(', ') || 'Not listed'}>
+                              {domainHistoryData.nameservers?.join(', ') || 'Not listed'}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="bg-gray-800 p-4 rounded-md border border-green-500/30">
+                        <h3 className="text-lg text-green-500 mb-3 font-mono">Lifecycle Timeline</h3>
+                        <ul className="space-y-3">
+                          {domainHistoryData.events.map((event, index) => (
+                            <li key={`${event.action}-${event.date}-${index}`} className="flex items-start">
+                              <div className="w-24 text-gray-400 text-xs font-mono mr-3">{formatDate(event.date)}</div>
+                              <div className="flex-1">
+                                <div className="flex items-center">
+                                  <span className="inline-block w-2 h-2 bg-green-500 rounded-full mr-2 mt-1"></span>
+                                  <span className="text-green-400 font-semibold mr-2 uppercase text-xs">{event.action}</span>
+                                  {event.registrar && <span className="text-gray-400 text-xs">via {event.registrar}</span>}
+                                </div>
+                                <p className="text-gray-200 text-sm ml-4">{event.description}</p>
+                              </div>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="bg-gray-800/50 border border-green-500/30 rounded-lg p-6 text-center">
+                      <FaExclamationTriangle className="text-yellow-400 mx-auto mb-4" size={32} />
+                      <h3 className="text-lg font-semibold text-green-400 mb-2">No lifecycle events</h3>
+                      <p className="text-gray-400">We couldn&apos;t reconstruct a history for {domain}.</p>
                     </div>
                   )}
                 </motion.div>

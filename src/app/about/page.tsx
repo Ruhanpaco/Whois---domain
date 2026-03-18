@@ -14,7 +14,6 @@ import {
   FaBug,
   FaChevronRight
 } from 'react-icons/fa';
-import DonationSection from '@/components/DonationSection';
 
 export default function About() {
   return (
@@ -194,9 +193,6 @@ export default function About() {
                       </ul>
                     </div>
                   </div>
-
-                  {/* Support/Donation Section */}
-                  <DonationSection />
 
                   <h3 className="text-xl text-green-500 mt-8 mb-4 flex items-center">
                     <FaBug className="mr-2" /> Usage Disclaimer

@@ -5,7 +5,6 @@ import { motion } from 'framer-motion';
 import { useRouter } from 'next/navigation';
 import { FaSearch, FaGlobe, FaShieldAlt, FaTerminal, FaNetworkWired, FaLock, FaDatabase, FaUserSecret } from 'react-icons/fa';
 import StatisticsCounter from '@/components/StatisticsCounter';
-import DonationSection from '@/components/DonationSection';
 
 export default function Home() {
   const [domain, setDomain] = useState('');
@@ -263,9 +262,6 @@ export default function Home() {
               </div>
             </div>
           </div>
-          
-          {/* Support/Donation Section */}
-          <DonationSection />
           
           {/* Features Explained - Detailed */}
           <div className="w-full max-w-4xl mb-12">
